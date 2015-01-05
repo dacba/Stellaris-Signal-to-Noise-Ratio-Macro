@@ -1,0 +1,59 @@
+CrazyDot Previous Changelog:
+	Version 1 - 11/26/14
+		Sub Folders not working correctly
+		Will work if files are in root folder
+		Ellipses need to be tighter
+		Basic analysis of mean, min, max and area of background, noise and signal
+	Version 1.1 - 12/1/14
+		Ellipses fixed, adequately tight around signal spots
+			Threshold changed to 0.05
+			First loop searches until the current pixel is 1-threshold of the brightness (Default is 95% of brightness)
+			Second loop searches until the change in brightness ratio is less than threshold (Default is 5%)
+		Fixed Recursive functionality
+	Version 1.1.1 - 12/2/14
+		Renamed Noise to Cell Noise
+		Fixed File naming when files are in sub folders
+		Added Mean and Median Signal to Cell Noise Ratio above Background in results
+			Calculates the Signal and Cell Noise above the background level
+	Version 1.2 - 12/3/14
+		Saves Histogram of signal, cell noise and background in histogram subfolder in the output directory
+		Does a basic statistical analysis of the spots, removes the bottom 7% of spots selected
+	Version 1.3 - 12/4/14
+		Changed zscore to a negative value to reflect the actual zscore
+		Fixed setThreshold, was originally setMinAndMax
+		renamed threshold variable to tolerance to better reflect its function
+		Added tolerancemultiplier to be more tolerant of increases in pixel brightness
+		Added UI
+		Fixed Polygon function, still needs work though
+		Results are now copied to a separate table and saved as one file
+		Removed Histogram image functionality
+			Images would not save without giving an error
+	Version 1.4 - 12/12/14
+		Added framework for variable maxima
+	Version 1.5 - 12/16/14
+		Polygon function Changes
+			No longer buffers area by one
+			Fixed threshold check, some lines contained a less than instead of greater than
+		Added derivative function
+			Takes the first derivative of the image and uses that to determine the noise value
+			Incorporates the zscore, lower means more local maxima
+			Replaces removing the bottom x percent of spots
+		Changed results formatting
+		Added Labels to images
+	Version 1.6 - 12/17/14
+		Moved result table manipulation to results function
+		Re-enabled Histogram in Signal, Noise and Background functions
+		Added Explanation of variables in dialog
+		Added information on variables in first line of final results
+	Version 1.7 - 12/29/14
+		Histogram
+			Save function requires the file path contain only \, no /
+			Created a stripath value that contains the extension stripped path name without the / in it
+		Changed file open command to run("Bioformats Importer"... to ensure the image is opened as a grey scale image
+		Changed derivative function so it calculates maxima from median, not mean.  Reduces error for  bright spots skewing the mean
+			Extremely bright spots still mess up the analysis
+		Changed Noise to Default threshold instead of Li
+			Ran into issues with Li and low noise levels
+			Default chooses more noise area when the noise levels are low
+			Li would just choose the area directly surrounding the signal
+		Added warnings for debugging and notifying the user of errors in analysis
