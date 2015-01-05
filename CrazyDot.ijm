@@ -2,8 +2,8 @@ macro "Calculate Signal to Noise Ratio...[c]" {
 /*
 This macro opens a directory and does an in depth analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
-Uses Find Maxima, noise 125, to find spots and expand the points to a selection used for spot analysis
-Use the Li threshold to determine cell noise and background values
+Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
+Use the Default threshold to determine cell noise and background values
 
 Tested on Fiji/ImageJ version 1.49b
 */
@@ -81,11 +81,13 @@ function process(dir, sub) {
 			height = getHeight();
 			width = getWidth();
 			if (nSlices > 1) run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+			window_raw = getImageID();
 			maxima = derivative();
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			run("Find Maxima...", "noise=" + maxima + " output=List"); //Find Maxima points above threshold
 			
 			newImage("Signal", "8-bit white", width, height, 1); 
+			window_signal = getImageID();
 			setColor(0); //Set color to black
 			seed = nResults;
 			
@@ -103,26 +105,25 @@ function process(dir, sub) {
 				}
 			
 			print(nResults + " points processed");
-			selectWindow("Signal");
+			selectImage(window_signal);
 			run("Create Selection");
 			roiManager("Add"); //Create Signal selection
 			run("Make Inverse"); //Make selection inverted
 			roiManager("Add"); //Create Inverse Signal selection
 			
-			
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			signal(); //Run Signal
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Signal");
 			updateResults();
 			
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			noise(); //Run Noise
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Cell Noise");
 			updateResults();
 			
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			background(); //Run Background
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Background");
@@ -133,15 +134,15 @@ function process(dir, sub) {
 			
 			
 			//Save Images
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			run("Select None");
 			run("Enhance Contrast", "saturated=0.01"); //Make it pretty
 			run("Find Maxima...", "noise=" + maxima + " output=[Single Points]"); //Find Maxima single points
 			drawString("Local Maxima Points", 10, 40, 'white');
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			run("8-bit");
 			drawString(path, 10, 40, 'white');
-			selectWindow("Signal");
+			selectImage(window_signal);
 			drawString("Signal Mask", 10, 40, 'white');
 			run("Images to Stack");
 			setSlice(3);
@@ -198,7 +199,7 @@ function signal() { //Measures Signal, ensure dots is in ROI manager, position 0
 	}//End of signal function
 
 function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
-	selectWindow("MAX_" + path);
+	selectImage(window_raw);
 	bright = getPixel(xi,yi);
 	
 	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance; r++); //Progress r until there is a drop in brightness (>10% default)
@@ -220,12 +221,12 @@ function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask 
 	w = x2-x1;
 	h = y2-y1;
 	
-	selectWindow("Signal");
+	selectImage(window_signal);
 	fillOval(x1, y1, w, h);
 	}//End of dot function
 
 function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws polygon on mask image
-	selectWindow("MAX_" + path);
+	selectImage(window_raw);
 	bright = getPixel(xi,yi);
 	
 	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance; r++);
@@ -260,7 +261,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
 	northwest = r; //Northwest point
 	
-	selectWindow("Signal");
+	selectImage(window_signal);
 	makePolygon(xi, north, xi + northeast, yi + northeast, east, yi, xi + southeast, yi - southeast, xi, south, xi - southwest, yi - southwest, west, yi, xi - northwest, yi + northwest);
 	fill();
 	}//End of crazy polygon function
@@ -268,16 +269,17 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 function derivative() { //Creates derivative of image
 	showStatus("Creating Derivative Image");
 	newImage("Derivative", "16-bit black", width, height, 1);
+	window_derivative = getImageID();
 	for (i = 0; i < height; i++) { //Create derivative image
 		showStatus("Creating Derivative Image");
 		for (n = 0; n < width; n++) {
-			selectWindow("MAX_" + path);
+			selectImage(window_raw);
 			bright = getPixel(n+1, i+1) - getPixel(n, i);
-			selectWindow("Derivative");
+			selectImage(window_derivative);
 			setPixel(n, i, bright);
 		}
 	}
-	selectWindow("Derivative");
+	selectImage(window_derivative);
 	setAutoThreshold("MaxEntropy dark");
 	run("Create Selection");
 	run("Measure");
