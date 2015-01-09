@@ -9,29 +9,36 @@ Tested on Fiji/ImageJ version 1.49b
 */
 
 //Default Variables
-tolerance = 0.1; //Tolerance for ellipse bounding. Higher means tighter ellipsies 
-tolerancemultiplier = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
+tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter ellipsies 
+tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 125;
 poly = false;
-zscore = -0.5; //Cutoffs, -3.0=0.1%, -2.0=2.3%, -1.5=7%, -1.0=15.9%, 0.0=50%
-//zscore is used in finding the maxima
+tolerance_maxima = 1;
+
 
 //Dialog
 Dialog.create("Spot Processer");
 
-Dialog.addMessage("Please enter the bounding tolerance, upward tolerance, and Z-score cutoff");
-Dialog.addString("Bounding Tolerance:", tolerance);
-Dialog.addString("Upward Tolerance:", tolerancemultiplier);
-//Dialog.addString("Z-Score:", zscore);
-//Dialog.addMessage("Bounding Tolerance: (0-1) Determines the cutoff point for spot expansion, lower means more strict(smaller area selected)\nUpward Tolerance: (0-1) Determines the tolerance for upward movement during spot expansion; 0 means any upward movement is tolerated, 1 means upward movement is tolerated the same as downward.\nZ-Score: (-3.0 - 3.0) Determines the cutoff for local maxima selection, lower means less spots");
+Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
+Dialog.addSlider("Bounding Tolerance:", 0, 1, tolerance_bounding);
+Dialog.addSlider("Upward Tolerance:", 0, 1, tolerance_upward);
+Dialog.addSlider("Maxmia Tolerance:", 1, 50, tolerance_maxima);
 Dialog.addCheckbox("Polygon spot creation (Slower, but more accurate)", false);
 Dialog.show();
 
 //Retrieve Choices
-tolerance = Dialog.getString();
-tolerancemultiplier = Dialog.getString();
-//zscore = Dialog.getString();
+tolerance_bounding = Dialog.getNumber();
+tolerance_upward = Dialog.getNumber();
+tolerance_maxima = Dialog.getNumber();
 poly = Dialog.getCheckbox();
+
+if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10) {
+	Dialog.create("Warning");
+	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
+	Dialog.addMessage("Bounding Tolerance: 0.7 - 0.9   " + tolerance_bounding + "\nUpward Tolerance: 0.5 - 1.0   " + tolerance_upward + "\nMaxima Tolerance: 1 - 10   " + tolerance_maxima);
+	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files to ensure the analysis was done correctly");
+	Dialog.show();
+	}
 
 
 //Initialize
@@ -42,10 +49,10 @@ run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear"); //Clear log
 run("Clear Results");
-run("Table...", "name=SNR width=800 height=400");
-run("Table...", "name=Points width=400 height=800");
-if (poly == false ) print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score(disabled): " + zscore + " Ellipse");
-else print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Polygon");
+run("Table...", "name=SNR width=400 height=200");
+run("Table...", "name=Points width=400 height=200");
+if (poly == false ) print("[SNR]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Ellipse");
+else print("[SNR]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Polygon");
 print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
 
 
@@ -53,6 +60,7 @@ dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
 outDir = dir + "Out-SNRatio\\";
 File.makeDirectory(outDir); //Create new out directory
 File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
+File.makeDirectory(outDir + "\\Maxima\\"); //Create Maxima directory
 
 process(dir, ""); //RUN IT!
 
@@ -84,10 +92,13 @@ function process(dir, sub) {
 			print("File: " + path);
 			height = getHeight();
 			width = getWidth();
-			if (nSlices > 1) run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
 			window_raw = getImageID();
-			maxima = derivative();
+			if (nSlices > 1) run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+			window_zstack = getImageID();
 			selectImage(window_raw);
+			run("Close");
+			maxima = derivative();
+			selectImage(window_zstack);
 
 			run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
 			run("Measure");
@@ -121,19 +132,19 @@ function process(dir, sub) {
 			run("Make Inverse"); //Make selection inverted
 			roiManager("Add"); //Create Inverse Signal selection
 			
-			selectImage(window_raw);
+			selectImage(window_zstack);
 			signal(); //Run Signal
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Signal");
 			updateResults();
 			
-			selectImage(window_raw);
+			selectImage(window_zstack);
 			noise(); //Run Noise
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Cell Noise");
 			updateResults();
 			
-			selectImage(window_raw);
+			selectImage(window_zstack);
 			background(); //Run Background
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Background");
@@ -144,12 +155,12 @@ function process(dir, sub) {
 			
 			
 			//Save Images
-			selectImage(window_raw);
+			selectImage(window_zstack);
 			run("Select None");
 			run("Enhance Contrast", "saturated=0.01"); //Make it pretty
 			run("Find Maxima...", "noise=" + maxima + " output=[Single Points]"); //Find Maxima single points
 			drawString("Local Maxima Points", 10, 40, 'white');
-			selectImage(window_raw);
+			selectImage(window_zstack);
 			run("8-bit");
 			drawString(path, 10, 40, 'white');
 			selectImage(window_signal);
@@ -209,23 +220,23 @@ function signal() { //Measures Signal, ensure dots is in ROI manager, position 0
 	} //End of signal function
 
 function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
-	selectImage(window_raw);
+	selectImage(window_zstack);
 	bright = getPixel(xi,yi);
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance; r++); //Progress r until there is a drop in brightness (>10% default)
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance * tolerancemultiplier) && r < 15; r++); //Progress r until there is no change in brightness (<10% default)
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding; r++); //Progress r until there is a drop in brightness (>10% default)
+	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); //Progress r until there is no change in brightness (<10% default)
 	x2 = xi + r; //right
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance; r--);
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright > tolerance || getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright < - tolerance * tolerancemultiplier) && r > -15; r--);
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding; r--);
+	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r > -15; r--);
 	x1 = xi + r; //left
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	y2 = yi + r; //top
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance; r--);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright > tolerance || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright < - tolerance * tolerancemultiplier) && r > -15; r--);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding; r--);
+	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright < - tolerance_bounding * tolerance_upward) && r > -15; r--);
 	y1 = yi + r; //bottom
 	
 	w = x2-x1;
@@ -236,39 +247,39 @@ function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask 
 	}//End of dot function
 
 function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws polygon on mask image
-	selectImage(window_raw);
+	selectImage(window_zstack);
 	bright = getPixel(xi,yi);
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++); 
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); 
 	north = yi + r; //North point
 	
-	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance; r++); 
-	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++); 
+	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding; r++); 
+	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); 
 	northeast = r; //Northeast point
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance * tolerancemultiplier) && r < 15; r++); 
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); 
 	east = xi + r; //East point
 	
-	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
+	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	southeast = r; //Southeast point
 	
-	for (r = 0; getPixel(xi, yi - r)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright > tolerance || getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
+	for (r = 0; getPixel(xi, yi - r)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright > tolerance_bounding || getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	south = yi - r; //South Point
 	
-	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
+	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	southwest = r; //Southwest point
 	
-	for (r = 0; getPixel(xi - r, yi)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright > tolerance || getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
+	for (r = 0; getPixel(xi - r, yi)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright > tolerance_bounding || getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	west = xi - r; //West point
 	
-	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance; r++);
-	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance * tolerancemultiplier) && r < 15; r++);
+	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding; r++);
+	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	northwest = r; //Northwest point
 	
 	selectImage(window_signal);
@@ -276,36 +287,19 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	fill();
 	}//End of crazy polygon function
 
-function derivative() { //Creates derivative of image
-	showStatus("Creating Derivative Image");
-	newImage("Derivative", "16-bit black", width, height, 1);
-	window_derivative = getImageID();
-	for (i = 0; i < height; i++) { //Create derivative image
-		showStatus("Creating Derivative Image");
-		for (n = 0; n < width; n++) {
-			selectImage(window_raw);
-			bright = abs(getPixel(n+1, i) - getPixel(n, i));
-			selectImage(window_derivative);
-			setPixel(n, i, bright);
-		}
-	}
-	selectImage(window_derivative);
-	setAutoThreshold("MaxEntropy dark");
-	run("Create Selection");
-	run("Measure");
-	if (getResult("Area", nResults - 1) < 100) { //Masks if only a small part of the image is selected
-		setColor(0);
-		fill();
-		run("Select None");
-		selectImage(window_derivative);
-		setAutoThreshold("MaxEntropy dark");
-		run("Create Selection");
-		run("Measure");
-	}
-	maxima = getResult("Median", nResults - 1);
-	run("Enhance Contrast", "saturated=0.1");
-	run("8-bit");
-	drawString("Derivative\nMaxima: " + maxima, 10, 40, 'white');
+function derivative() { //Searches upwards until maxima levels out
+	run("Clear Results");
+	maxima = 20;
+	run("Find Maxima...", "noise=" + maxima + " output=Count");
+	setResult("Maxima", nResults - 1, maxima);
+	updateResults();
+	maxima += 5;
+	do { 
+		run("Find Maxima...", "noise=" + maxima + " output=Count");
+		setResult("Maxima", nResults - 1, maxima);
+		updateResults();
+		maxima += 5;
+	} while (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1 + (tolerance_maxima/100))
 	
 	return maxima;
 	}
