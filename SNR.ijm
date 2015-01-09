@@ -47,13 +47,20 @@ setOption("ShowRowNumbers", false);
 run("Set Measurements...", "area mean standard min median redirect=None decimal=3");
 run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
-print("\\Clear"); //Clear log
+print("\\Clear");
 run("Clear Results");
+//Open Tables
 run("Table...", "name=SNR width=400 height=200");
 run("Table...", "name=Points width=400 height=200");
+run("Table...", "name=Condense width=400 height=200");
+//Initialize SNR table
 if (poly == false ) print("[SNR]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Ellipse");
 else print("[SNR]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Polygon");
 print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
+//Initialize Condensed Table
+if (poly == false ) print("[Condense]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Ellipse");
+else print("[Condense]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Polygon");
+print("[Condense]", "File, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
 
 
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
@@ -70,6 +77,9 @@ saveAs("Results", outDir + "Results_SNR.csv");
 run("Close");
 selectWindow("Points");
 saveAs("Results", outDir + "Results_Points.csv");
+run("Close");
+selectWindow("Condense");
+saveAs("Results", outDir + "Results_Condense.csv");
 run("Close");
 
 function process(dir, sub) {
@@ -339,6 +349,23 @@ function results() {
 	String.copyResults; //Copy results to clipboard
 	String.append(String.paste); //Append results to buffer from clipboard 
 	print("[SNR]", replace(String.buffer, "	", ", ")); //Print results to new table
+	run("Clear Results");
+	
+	//Save Condensed Results
+	setResult("File", nResults, path);
+	setResult("Mean StN Ratio", nResults - 1, signoimean);
+	setResult("Median StN Ratio", nResults - 1, signoimedian);
+	setResult("Median Signal - Background", nResults - 1, sigrel);
+	setResult("Median Noise - Background", nResults - 1, noirel);
+	setResult("Spots", nResults - 1, seed);
+	setResult("Maxima", nResults - 1, maxima);
+	if (getResult("Spots", nResults - 1) < 100) setResult("Warnings", nResults - 1, "Low Spot Count");
+	if (noirel == 0) setResult("Warnings", nResults - 1, "Signal Area >= Noise Area");
+	updateResults();
+	String.resetBuffer;
+	String.copyResults; //Copy results to clipboard
+	String.append(String.paste); //Append results to buffer from clipboard 
+	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
 	}
 
