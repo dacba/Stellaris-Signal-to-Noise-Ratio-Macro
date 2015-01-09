@@ -1,3 +1,4 @@
+
 macro "Calculate Signal to Noise Ratio...[c]" {
 /*
 This macro opens a directory and does an in depth analysis of spots
@@ -30,13 +31,14 @@ Dialog.show();
 //Retrieve Choices
 tolerance_bounding = Dialog.getNumber();
 tolerance_upward = Dialog.getNumber();
+maxima = Dialog.getNumber();
 tolerance_maxima = Dialog.getNumber();
 poly = Dialog.getCheckbox();
 
 if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 70) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Tolerance: 0.7 - 0.9   " + tolerance_bounding + "\nUpward Tolerance: 0.5 - 1.0   " + tolerance_upward + "\nMaxima: 0 - 50   " + maxima + "\nMaxima Tolerance: 1 - 10   " + tolerance_maxima);
+	Dialog.addMessage("Bounding Tolerance: 0.7 - 0.9  (" + tolerance_bounding + ")\nUpward Tolerance: 0.5 - 1.0  (" + tolerance_upward + ")\nMaxima: 0 - 50  (" + maxima + ")\nMaxima Tolerance: 1 - 10  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files to ensure the analysis was done correctly");
 	Dialog.show();
 	}
