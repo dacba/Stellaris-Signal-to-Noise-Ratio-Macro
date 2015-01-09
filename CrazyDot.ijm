@@ -42,10 +42,11 @@ run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear"); //Clear log
 run("Clear Results");
-run("Table...", "name=Final width=800 height=400");
-if (poly == false ) print("[Final]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Ellipse");
-else print("[Final]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Polygon");
-print("[Final]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
+run("Table...", "name=SNR width=800 height=400");
+run("Table...", "name=Points width=400 height=800");
+if (poly == false ) print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Ellipse");
+else print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Polygon");
+print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
 
 
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
@@ -56,8 +57,11 @@ File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
 process(dir, ""); //RUN IT!
 
 //Save it!
-selectWindow("Final");
-saveAs("Results", outDir + "Results.csv");
+selectWindow("SNR");
+saveAs("Results", outDir + "Results_SNR.csv");
+run("Close");
+selectWindow("Points");
+saveAs("Results", outDir + "Results_Points.csv");
 run("Close");
 
 function process(dir, sub) {
@@ -84,8 +88,12 @@ function process(dir, sub) {
 			window_raw = getImageID();
 			maxima = derivative();
 			selectImage(window_raw);
-			run("Find Maxima...", "noise=" + maxima + " output=List"); //Find Maxima points above threshold
-			
+			run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
+			run("Measure");
+			String.resetBuffer;
+			String.append(path + ", ");
+			for(n = 0; n < nResults; n++) String.append(getResult("Mean", n) + ", ");
+			print("[Points]", String.buffer);
 			newImage("Signal", "8-bit white", width, height, 1); 
 			window_signal = getImageID();
 			setColor(0); //Set color to black
@@ -95,16 +103,17 @@ function process(dir, sub) {
 			if (nResults > 2500) dotmax = 2500;
 			if (poly == false) { //Run the faster dots program
 				for (q = 0; q < dotmax; q++) {
-					dots(getResult("X", q), getResult("Y", q)); //Run dots with different x and y values
+					dots(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			else { //Run the slower polygon program
 				for (q = 0; q < dotmax; q++) {
-					crazypoly(getResult("X", q), getResult("Y", q)); //Run dots with different x and y values
+					crazypoly(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			
 			print(nResults + " points processed");
+			run("Clear Results");
 			selectImage(window_signal);
 			run("Create Selection");
 			roiManager("Add"); //Create Signal selection
@@ -314,7 +323,7 @@ function results() {
 	String.resetBuffer;
 	String.copyResults; //Copy results to clipboard
 	String.append(String.paste); //Append results to buffer from clipboard 
-	print("[Final]", replace(String.buffer, "	", ", ")); //Print results to new table
+	print("[SNR]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
 	}
 
