@@ -92,7 +92,7 @@ function process(dir, sub) {
 			run("Measure");
 			String.resetBuffer;
 			String.append(path + ", ");
-			for(n = 0; n < nResults; n++) String.append(getResult("Mean", n) + ", ");
+			for(n = 1; n < nResults; n++) String.append(getResult("Mean", n) + ", ");
 			print("[Points]", String.buffer);
 			newImage("Signal", "8-bit white", width, height, 1); 
 			window_signal = getImageID();
