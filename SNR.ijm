@@ -11,7 +11,7 @@ Tested on Fiji/ImageJ version 1.49b
 //Default Variables
 tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter ellipsies 
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
-maxima = 125;
+maxima = 50;
 poly = false;
 tolerance_maxima = 1;
 
@@ -22,6 +22,7 @@ Dialog.create("Spot Processer");
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
 Dialog.addSlider("Bounding Tolerance:", 0, 1, tolerance_bounding);
 Dialog.addSlider("Upward Tolerance:", 0, 1, tolerance_upward);
+Dialog.addSlider("Maxmia:", 0, 200, maxima);
 Dialog.addSlider("Maxmia Tolerance:", 1, 50, tolerance_maxima);
 Dialog.addCheckbox("Polygon spot creation (Slower, but more accurate)", false);
 Dialog.show();
@@ -32,10 +33,10 @@ tolerance_upward = Dialog.getNumber();
 tolerance_maxima = Dialog.getNumber();
 poly = Dialog.getCheckbox();
 
-if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10) {
+if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 70) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Tolerance: 0.7 - 0.9   " + tolerance_bounding + "\nUpward Tolerance: 0.5 - 1.0   " + tolerance_upward + "\nMaxima Tolerance: 1 - 10   " + tolerance_maxima);
+	Dialog.addMessage("Bounding Tolerance: 0.7 - 0.9   " + tolerance_bounding + "\nUpward Tolerance: 0.5 - 1.0   " + tolerance_upward + "\nMaxima: 0 - 50   " + maxima + "\nMaxima Tolerance: 1 - 10   " + tolerance_maxima);
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files to ensure the analysis was done correctly");
 	Dialog.show();
 	}
@@ -168,15 +169,15 @@ function process(dir, sub) {
 			selectImage(window_zstack);
 			run("Select None");
 			run("Enhance Contrast", "saturated=0.01"); //Make it pretty
-			run("Find Maxima...", "noise=" + maxima + " output=[Single Points]"); //Find Maxima single points
-			drawString("Local Maxima Points", 10, 40, 'white');
+			//run("Find Maxima...", "noise=" + maxima + " output=[Single Points]"); //Find Maxima single points
+			//drawString("Local Maxima Points", 10, 40, 'white');
 			selectImage(window_zstack);
 			run("8-bit");
 			drawString(path, 10, 40, 'white');
 			selectImage(window_signal);
 			drawString("Signal Mask", 10, 40, 'white');
 			run("Images to Stack");
-			setSlice(3);
+			setSlice(2);
 			run("Add Slice");
 			roiManager("Select", newArray(1,2));
 			roiManager("AND");
@@ -299,7 +300,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 
 function derivative() { //Searches upwards until maxima levels out
 	run("Clear Results");
-	maxima = 20;
+	maxima = 50;
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
 	updateResults();
