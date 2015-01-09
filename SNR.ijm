@@ -22,15 +22,15 @@ Dialog.create("Spot Processer");
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance, and Z-score cutoff");
 Dialog.addString("Bounding Tolerance:", tolerance);
 Dialog.addString("Upward Tolerance:", tolerancemultiplier);
-Dialog.addString("Z-Score:", zscore);
-Dialog.addMessage("Bounding Tolerance: (0-1) Determines the cutoff point for spot expansion, lower means more strict(smaller area selected)\nUpward Tolerance: (0-1) Determines the tolerance for upward movement during spot expansion; 0 means any upward movement is tolerated, 1 means upward movement is tolerated the same as downward.\nZ-Score: (-3.0 - 3.0) Determines the cutoff for local maxima selection, lower means less spots");
+//Dialog.addString("Z-Score:", zscore);
+//Dialog.addMessage("Bounding Tolerance: (0-1) Determines the cutoff point for spot expansion, lower means more strict(smaller area selected)\nUpward Tolerance: (0-1) Determines the tolerance for upward movement during spot expansion; 0 means any upward movement is tolerated, 1 means upward movement is tolerated the same as downward.\nZ-Score: (-3.0 - 3.0) Determines the cutoff for local maxima selection, lower means less spots");
 Dialog.addCheckbox("Polygon spot creation (Slower, but more accurate)", false);
 Dialog.show();
 
 //Retrieve Choices
 tolerance = Dialog.getString();
 tolerancemultiplier = Dialog.getString();
-zscore = Dialog.getString();
+//zscore = Dialog.getString();
 poly = Dialog.getCheckbox();
 
 
@@ -44,7 +44,7 @@ print("\\Clear"); //Clear log
 run("Clear Results");
 run("Table...", "name=SNR width=800 height=400");
 run("Table...", "name=Points width=400 height=800");
-if (poly == false ) print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Ellipse");
+if (poly == false ) print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score(disabled): " + zscore + " Ellipse");
 else print("[SNR]", "Bounding Tolerance: " + tolerance + " Upward Tolerance: " + tolerancemultiplier + " Z-Score: " + zscore + " Polygon");
 print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
 
