@@ -88,32 +88,33 @@ function process(dir, sub) {
 			window_raw = getImageID();
 			maxima = derivative();
 			selectImage(window_raw);
+
 			run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
 			run("Measure");
 			String.resetBuffer;
 			String.append(path + ", ");
-			for(n = 1; n < nResults; n++) String.append(getResult("Mean", n) + ", ");
+			for(n = 1; n < nResults && n < 2500; n++) String.append(getResult("Mean", n) + ", ");
 			print("[Points]", String.buffer);
+			run("Clear Results");
+			run("Find Maxima...", "noise=" + maxima + " output=List");
+			
 			newImage("Signal", "8-bit white", width, height, 1); 
 			window_signal = getImageID();
 			setColor(0); //Set color to black
 			seed = nResults;
 			
-			dotmax = nResults;
-			if (nResults > 2500) dotmax = 2500;
 			if (poly == false) { //Run the faster dots program
-				for (q = 0; q < dotmax; q++) {
+				for (q = 0; q < nResults && q < 2500; q++) {
 					dots(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			else { //Run the slower polygon program
-				for (q = 0; q < dotmax; q++) {
+				for (q = 0; q < nResults && q < 2500; q++) {
 					crazypoly(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			
 			print(nResults + " points processed");
-			run("Clear Results");
 			selectImage(window_signal);
 			run("Create Selection");
 			roiManager("Add"); //Create Signal selection
@@ -205,7 +206,7 @@ function signal() { //Measures Signal, ensure dots is in ROI manager, position 0
 	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Signal.png");
 	close();
 	run("Select None");
-	}//End of signal function
+	} //End of signal function
 
 function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
 	selectImage(window_raw);
@@ -283,7 +284,7 @@ function derivative() { //Creates derivative of image
 		showStatus("Creating Derivative Image");
 		for (n = 0; n < width; n++) {
 			selectImage(window_raw);
-			bright = getPixel(n+1, i+1) - getPixel(n, i);
+			bright = abs(getPixel(n+1, i) - getPixel(n, i));
 			selectImage(window_derivative);
 			setPixel(n, i, bright);
 		}
@@ -292,8 +293,16 @@ function derivative() { //Creates derivative of image
 	setAutoThreshold("MaxEntropy dark");
 	run("Create Selection");
 	run("Measure");
-	maxima = getResult("Median", nResults - 1) + getResult("StdDev", nResults - 1) * zscore;
-	//print(getResult("Mean", nResults - 1), getResult("Median", nResults - 1));
+	if (getResult("Area", nResults - 1) < 100) { //Masks if only a small part of the image is selected
+		setColor(0);
+		fill();
+		run("Select None");
+		selectImage(window_derivative);
+		setAutoThreshold("MaxEntropy dark");
+		run("Create Selection");
+		run("Measure");
+	}
+	maxima = getResult("Median", nResults - 1);
 	run("Enhance Contrast", "saturated=0.1");
 	run("8-bit");
 	drawString("Derivative\nMaxima: " + maxima, 10, 40, 'white');
