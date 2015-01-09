@@ -299,8 +299,20 @@ function derivative() { //Searches upwards until maxima levels out
 		setResult("Maxima", nResults - 1, maxima);
 		updateResults();
 		maxima += 5;
-	} while (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1 + (tolerance_maxima/100))
-	
+		} while (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1 + (tolerance_maxima/100))
+	run("Find Maxima...", "noise=" + maxima + " output=Count"); //Run one more time and make sure the spot count difference wasn't a one-time fluke
+	setResult("Maxima", nResults - 1, maxima);
+	updateResults();
+	if (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1.01);
+	else { 
+		maxima += 5;
+		do { 
+			run("Find Maxima...", "noise=" + maxima + " output=Count");
+			setResult("Maxima", nResults - 1, maxima);
+			updateResults();
+			maxima += 5;
+			} while (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1.01)
+		}
 	return maxima;
 	}
 
