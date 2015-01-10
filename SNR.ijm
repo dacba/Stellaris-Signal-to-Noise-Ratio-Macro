@@ -6,7 +6,7 @@ Based off of "TrevorsMeasure" or "Measure Dots..."
 Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
 Use the Default threshold to determine cell noise and background values
 
-Tested on Fiji/ImageJ version 1.49b
+Tested on ImageJ version 1.49m
 */
 
 //Default Variables
@@ -35,6 +35,7 @@ maxima = Dialog.getNumber();
 tolerance_maxima = Dialog.getNumber();
 poly = Dialog.getCheckbox();
 
+//Warn if Choices are outside of recommended range
 if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 70) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
@@ -52,6 +53,7 @@ run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
+
 //Open Tables
 run("Table...", "name=SNR width=400 height=200");
 run("Table...", "name=Points width=400 height=200");
@@ -65,14 +67,14 @@ if (poly == false ) print("[Condense]", "Bounding Tolerance: " + tolerance_bound
 else print("[Condense]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Polygon");
 print("[Condense]", "File, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
 
-
+//Create Directories
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
 outDir = dir + "Out-SNRatio\\";
 File.makeDirectory(outDir); //Create new out directory
 File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
-File.makeDirectory(outDir + "\\Maxima\\"); //Create Maxima directory
 
-process(dir, ""); //RUN IT!
+//RUN IT!
+process(dir, ""); 
 
 //Save it!
 selectWindow("SNR");
@@ -100,8 +102,9 @@ function process(dir, sub) {
 			stripath = replace(substring(path, 0, indexOf(path, ".nd2")), "/", "_");
 			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
 			info = getImageInfo();
-			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1) close();
+			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1) close(); //If DAPI, ignore
 			else {
+			//Initialize Image
 			print("File: " + path);
 			height = getHeight();
 			width = getWidth();
@@ -110,9 +113,10 @@ function process(dir, sub) {
 			window_zstack = getImageID();
 			selectImage(window_raw);
 			run("Close");
+			
+			//Determine Maxima
 			maxima = derivative();
 			selectImage(window_zstack);
-
 			run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
 			run("Measure");
 			String.resetBuffer;
@@ -122,11 +126,14 @@ function process(dir, sub) {
 			run("Clear Results");
 			run("Find Maxima...", "noise=" + maxima + " output=List");
 			
+			//Create signal mask image
 			newImage("Signal", "8-bit white", width, height, 1); 
 			window_signal = getImageID();
-			setColor(0); //Set color to black
+			setColor(0);
 			seed = nResults;
 			
+			
+			//Expand dots
 			if (poly == false) { //Run the faster dots program
 				for (q = 0; q < nResults && q < 2500; q++) {
 					dots(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
@@ -138,6 +145,7 @@ function process(dir, sub) {
 					}//End of dots loop
 				}
 			
+			//Create Selection of signal
 			print(nResults + " points processed");
 			selectImage(window_signal);
 			run("Create Selection");
@@ -145,20 +153,23 @@ function process(dir, sub) {
 			run("Make Inverse"); //Make selection inverted
 			roiManager("Add"); //Create Inverse Signal selection
 			
+			//Run signal
 			selectImage(window_zstack);
-			signal(); //Run Signal
+			signal();
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Signal");
 			updateResults();
 			
+			//Run Noise
 			selectImage(window_zstack);
-			noise(); //Run Noise
+			noise(); 
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Cell Noise");
 			updateResults();
 			
+			//Run Background
 			selectImage(window_zstack);
-			background(); //Run Background
+			background();
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Background");
 			updateResults();
@@ -166,13 +177,10 @@ function process(dir, sub) {
 			//Results
 			results();
 			
-			
 			//Save Images
 			selectImage(window_zstack);
 			run("Select None");
 			run("Enhance Contrast", "saturated=0.01"); //Make it pretty
-			//run("Find Maxima...", "noise=" + maxima + " output=[Single Points]"); //Find Maxima single points
-			//drawString("Local Maxima Points", 10, 40, 'white');
 			selectImage(window_zstack);
 			run("8-bit");
 			drawString(path, 10, 40, 'white');
@@ -212,9 +220,11 @@ function noise() { //Measures Cell Noise, ensure dots and inverse dots are in th
 	run("Select None");
 	setAutoThreshold("Default dark"); //Threshold cell noise
 	run("Create Selection"); //Create selection 2
+	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
+	run("Enlarge...", "enlarge=11 pixel"); //Expand Cell noise boundary; Needed for exceptional images
 	roiManager("Add");
-	roiManager("Select", newArray(1,2));//Select Inverse dots and Li dark
-	roiManager("AND"); //Select regions of Li dark and inverse of dots
+	roiManager("Select", newArray(1,2));//Select Inverse dots and Cell Noise
+	roiManager("AND"); //Select regions of Cell Noise and inverse of dots
 	run("Measure");
 	run("Histogram");
 	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Cell_Noise.png");
@@ -300,14 +310,15 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	fill();
 	}//End of crazy polygon function
 
-function derivative() { //Searches upwards until maxima levels out
+function derivative() { //Searches upwards until spot count levels out
 	run("Clear Results");
 	maxima = 50;
+	//Initialize Maxima Results
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
 	updateResults();
 	maxima += 5;
-	do { 
+	do { //Loop until count levels out
 		run("Find Maxima...", "noise=" + maxima + " output=Count");
 		setResult("Maxima", nResults - 1, maxima);
 		updateResults();
@@ -316,7 +327,7 @@ function derivative() { //Searches upwards until maxima levels out
 	run("Find Maxima...", "noise=" + maxima + " output=Count"); //Run one more time and make sure the spot count difference wasn't a one-time fluke
 	setResult("Maxima", nResults - 1, maxima);
 	updateResults();
-	if (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1.01);
+	if (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1 + (tolerance_maxima/100));
 	else { 
 		maxima += 5;
 		do { 
@@ -324,12 +335,13 @@ function derivative() { //Searches upwards until maxima levels out
 			setResult("Maxima", nResults - 1, maxima);
 			updateResults();
 			maxima += 5;
-			} while (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1.01)
+			} while (getResult("Count", nResults - 2)/getResult("Count", nResults - 1) > 1 + (tolerance_maxima/100))
 		}
 	return maxima;
 	}
 
 function results() {
+	//Calculate signal to noise ratio
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1));
 	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1));
 	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1);
@@ -339,15 +351,18 @@ function results() {
 		signoimedian = "inf";
 		noirel = 0;
 		}
+	//Set results
 	setResult("Mean StN Ratio", nResults - 3, signoimean);
 	setResult("Median StN Ratio", nResults - 3, signoimedian);
 	setResult("Median Signal - Background", nResults - 3, sigrel);
 	setResult("Median Noise - Background", nResults - 3, noirel);
 	setResult("Spots", nResults - 3, seed);
 	setResult("Maxima", nResults - 3, maxima);
+	//Set Warnings
 	if (getResult("Spots", nResults - 3) < 100) setResult("Warnings", nResults - 3, "Low Spot Count");
 	if (noirel == 0) setResult("Warnings", nResults - 3, "Signal Area >= Noise Area");
 	updateResults();
+	//String manipulation
 	String.resetBuffer;
 	String.copyResults; //Copy results to clipboard
 	String.append(String.paste); //Append results to buffer from clipboard 
