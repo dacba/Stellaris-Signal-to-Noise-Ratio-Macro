@@ -15,6 +15,7 @@ tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement
 maxima = 50;
 poly = false;
 tolerance_maxima = 1;
+sum_intensity = false;
 
 
 //Dialog
@@ -25,7 +26,8 @@ Dialog.addSlider("Bounding Tolerance:", 0, 1, tolerance_bounding);
 Dialog.addSlider("Upward Tolerance:", 0, 1, tolerance_upward);
 Dialog.addSlider("Maxmia:", 0, 200, maxima);
 Dialog.addSlider("Maxmia Tolerance:", 1, 50, tolerance_maxima);
-Dialog.addCheckbox("Polygon spot creation (Slower, but more accurate)", false);
+Dialog.addCheckbox("Polygon spot creation (Slower)", false);
+Dialog.addCheckbox("Sum Intensity(Slower)", false);
 Dialog.show();
 
 //Retrieve Choices
@@ -34,6 +36,7 @@ tolerance_upward = Dialog.getNumber();
 maxima = Dialog.getNumber();
 tolerance_maxima = Dialog.getNumber();
 poly = Dialog.getCheckbox();
+sum_intensity = Dialog.getCheckbox();
 
 //Warn if Choices are outside of recommended range
 if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 70) {
@@ -67,6 +70,9 @@ if (poly == false ) print("[Condense]", "Bounding Tolerance: " + tolerance_bound
 else print("[Condense]", "Bounding Tolerance: " + tolerance_bounding + " Upward Tolerance: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Polygon");
 print("[Condense]", "File, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Maxima, Warnings");
 
+if (sum_intensity == false) print("[Points]", "Peak Brightness");
+else print("[Points]", "Sum Intensity");
+
 //Create Directories
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
 outDir = dir + "Out-SNRatio\\";
@@ -74,7 +80,7 @@ File.makeDirectory(outDir); //Create new out directory
 File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
 
 //RUN IT!
-process(dir, ""); 
+SNRmain(dir, ""); 
 
 //Save it!
 selectWindow("SNR");
@@ -87,7 +93,7 @@ selectWindow("Condense");
 saveAs("Results", outDir + "Results_Condense.csv");
 run("Close");
 
-function process(dir, sub) {
+function SNRmain(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list 
 	n = 0;
@@ -95,7 +101,7 @@ function process(dir, sub) {
 		path = sub + list[i];
 		if (endsWith(list[i], "/") && indexOf(path, "Out") == -1) {
 			File.makeDirectory(outDir + path); //Recreate file system in output folder
-			process(dir, path); //Recursive Step
+			SNRmain(dir, path); //Recursive Step
 			}
 		else if (endsWith(list[i], ".nd2")) {
 			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
@@ -117,15 +123,30 @@ function process(dir, sub) {
 			//Determine Maxima
 			maxima = derivative();
 			selectImage(window_zstack);
-			run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
-			run("Measure");
-			String.resetBuffer;
-			String.append(path + ", ");
-			for(n = 1; n < nResults && n < 2500; n++) String.append(getResult("Mean", n) + ", ");
-			print("[Points]", String.buffer);
 			run("Clear Results");
-			run("Find Maxima...", "noise=" + maxima + " output=List");
-			
+			if (sum_intensity == false) {
+				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
+				run("Measure");
+				String.resetBuffer;
+				String.append(path + ", ");
+				for (n = 1; n < nResults; n++) String.append(getResult("Mean", n) + ", ");
+				print("[Points]", String.buffer);
+				}
+			else {
+				run("Find Maxima...", "noise=" + maxima + " output=List");
+				setResult("Sum Intensity", 0, 0);
+				for (q = 0; q < nResults; q++) {
+					selectImage(window_zstack);
+					makeOval(getResult("X", q), getResult("Y", q), 5, 5);
+					getRawStatistics(nPixels, mean, dummy, dummy, dummy, dumb);
+					setResult("Sum Intensity", q, nPixels * mean);
+					}
+				String.resetBuffer;
+				String.append(path + ", ");
+				for (n = 1; n < nResults; n++) String.append(getResult("Sum Intensity", n) + ", ");
+				print("[Points]", String.buffer);
+				}
+
 			//Create signal mask image
 			newImage("Signal", "8-bit white", width, height, 1); 
 			window_signal = getImageID();
