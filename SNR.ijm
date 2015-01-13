@@ -206,12 +206,17 @@ function SNRmain(dir, sub) {
 			run("8-bit");
 			drawString(path, 10, 40, 'white');
 			selectImage(window_signal);
+			run("Invert"); 
 			drawString("Signal Mask", 10, 40, 'white');
 			run("Images to Stack");
 			setSlice(2);
 			run("Add Slice");
 			roiManager("Select", newArray(1,2));
 			roiManager("AND");
+			setColor(128);
+			fill();
+			run("Select None");
+			roiManager("Select", 0);
 			setColor(255);
 			fill();
 			drawString("Cell Noise", 10, 40, 'white');
