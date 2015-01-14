@@ -7,6 +7,7 @@ Uses Find Maxima to find spots and expand the points to a selection used for spo
 Use the Default threshold to determine cell noise and background values
 
 Tested on ImageJ version 1.49m
+Does NOT work on ImageJ version 1.49n
 */
 
 //Initialize
@@ -19,7 +20,7 @@ setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
 print(getVersion());
-if (getVersion() == "1.49n") exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
+if (endsWith(getVersion(), "1.49n") == true) exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
 
 
 //Default Variables
@@ -37,10 +38,10 @@ plot = false;
 Dialog.create("Spot Processer");
 
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
-Dialog.addSlider("Bounding Tolerance:", 0, 1, tolerance_bounding);
-Dialog.addSlider("Upward Tolerance:", 0, 1, tolerance_upward);
-Dialog.addSlider("Starting Maxmia:", 0, 200, maxima);
-Dialog.addSlider("Maxmia Tolerance:", 1, 50, tolerance_maxima);
+Dialog.addSlider("Bounding Tolerance(Higher = tighter spots):", 0, 0.5, tolerance_bounding);
+Dialog.addSlider("Upward Tolerance(Higher = tighter spots):", 0, 1, tolerance_upward);
+Dialog.addSlider("Starting Maxmia(Higher = faster):", 0, 200, maxima);
+Dialog.addSlider("Maxmia Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addCheckboxGroup(2, 2, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results"), newArray(poly, sum_intensity, peak_intensity, plot));
 Dialog.show();
 
@@ -87,7 +88,7 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
 outDir = dir + "Out-SNRatio\\";
 File.makeDirectory(outDir); //Create new out directory
-File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
+//File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create histogram directory
 
 //RUN IT!
@@ -138,6 +139,7 @@ function SNRmain(dir, sub) {
 			window_zstack = getImageID();
 			selectImage(window_raw);
 			run("Close");
+			warnings = 0;
 			
 			//Determine Maxima
 			maxima = maximasearch();
@@ -176,7 +178,6 @@ function SNRmain(dir, sub) {
 			window_signal = getImageID();
 			setColor(0);
 			seed = nResults;
-			warnings = 0;
 			
 			//Expand dots
 			if (poly == false) { //Run the faster dots program
@@ -257,9 +258,9 @@ function background() { //Measures background, the darkest part, where there are
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
 	run("Create Selection");
 	run("Measure");
-	run("Histogram");
-	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Background.png");
-	close();
+	//run("Histogram");
+	//saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Background.png");
+	//close();
 	run("Select None"); //Don't forget to set the File name and description in results
 	} //End of Function
 
@@ -273,8 +274,8 @@ function noise() { //Measures Cell Noise, ensure dots and inverse dots are in th
 	roiManager("Select", newArray(1,2));//Select Inverse dots and Cell Noise
 	roiManager("AND"); //Select regions of Cell Noise and inverse of dots
 	run("Measure");
-	run("Histogram");
-	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Cell_Noise.png");
+	//run("Histogram");
+	//saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Cell_Noise.png");
 	close();
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
 	}//End of Noise function
@@ -283,8 +284,8 @@ function signal() { //Measures Signal, ensure dots is in ROI manager, position 0
 	run("Select None");
 	roiManager("Select", 0);
 	run("Measure");
-	run("Histogram");
-	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Signal.png");
+	//run("Histogram");
+	//saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Signal.png");
 	close();
 	run("Select None");
 	} //End of signal function
@@ -379,6 +380,15 @@ function maximasearch() { //Searches upwards until spot count levels out
 	updateResults();
 	maxima += 5;
 	//if spots is really low, lower maxima to zero and start over
+	if (getResult("Count", nResults - 1) < 50) {
+		warnings += 13;
+		run("Clear Results");
+		maxima = 0;
+		run("Find Maxima...", "noise=" + maxima + " output=Count");
+		setResult("Maxima", nResults - 1, maxima);
+		updateResults();
+		maxima += 5;
+		}
 	do { //Loop until count levels out
 		run("Find Maxima...", "noise=" + maxima + " output=Count");
 		setResult("Maxima", nResults - 1, maxima);
@@ -435,13 +445,14 @@ function results() {
 	setResult("Spots", nResults - 3, seed);
 	setResult("Maxima", nResults - 3, maxima);
 	//Set Warnings
-	/*Warning Codes
+	/*
+	Warning Codes
 	1 = Low spot count
 	2 = Maxima is too high
 	4 = Signal Area >= Noise Area
 	5 = Max bounding limit
+	13 = Starting Maxima was reduced to zero
 	*/
-	warnings = 0;
 	if (getResult("Spots", nResults - 3) < 100) warnings += 1;
 	if (maxima_start == maxima - 15) warnings += 2;
 	if (noirel == 0) warnings += 4;
