@@ -35,7 +35,7 @@ tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 50;
 poly = true;
-tolerance_maxima = 1;
+tolerance_maxima = 3;
 sum_intensity = true;
 peak_intensity = false;
 plot = false;
@@ -65,7 +65,7 @@ maxima_start = maxima;
 
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.1 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 50) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.1 || tolerance_upward < 0.5 || tolerance_maxima > 10 || tolerance_maxima < 3 || maxima > 50) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
 	Dialog.addMessage("Bounding Tolerance: 0.1 - 0.3  (" + tolerance_bounding + ")\nUpward Tolerance: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Tolerance: 1 - 10  (" + tolerance_maxima + ")");
@@ -161,10 +161,13 @@ function SNRmain(dir, sub) {
 			height = getHeight();
 			width = getWidth();
 			window_raw = getImageID();
-			if (nSlices > 1) run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
-			window_zstack = getImageID();
-			selectImage(window_raw);
-			run("Close");
+			if (nSlices > 1) { 
+				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+				window_zstack = getImageID();
+				selectImage(window_raw);
+				run("Close");
+				}
+			else window_zstack = window_raw;
 			warnings = 0;
 			
 			//Determine Maxima
@@ -420,6 +423,12 @@ function maximasearch() { //Searches upwards until spot count levels out
 		}
 		
 	if (plot == true) { //Create plots for maxima results
+		temp_count = getResult("Count", nResults - 1);
+		for (n = maxima; n < maxima + maxima - maxima_start + 10; n += 5) {
+			run("Find Maxima...", "noise=" + n + " output=Count");
+			setResult("Maxima", nResults - 1, n);
+			updateResults();
+			}
 		for (n = 0; n < nResults; n++) {
 			xvalues = Array.concat(xvalues, getResult("Maxima", n));
 			yvalues = Array.concat(yvalues, getResult("Count", n));
@@ -427,6 +436,8 @@ function maximasearch() { //Searches upwards until spot count levels out
 		xvalues = Array.slice(xvalues, 1, n);
 		yvalues = Array.slice(yvalues, 1, n);
 		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues);
+		Plot.drawLine(maxima, yvalues[n-2], maxima, temp_count);
+		Plot.drawLine(maxima_start, temp_count, maxima, temp_count);
 		Plot.show();
 		selectWindow("Plot");
 		saveAs("PNG", outDir + "\\Plots\\" + stripath);
