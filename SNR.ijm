@@ -18,11 +18,16 @@ run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
-print(getVersion());
 
-if (getVersion() == "1.49n") exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
-if (endsWith(getVersion(), "1.49n") == true) exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
-if (endsWith(getVersion(), "1.49n") == true) exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
+if (indexOf(getVersion(), "1.49n") > -1) {
+	Dialog.create("UnCompatible ImageJ Version");
+	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m from 1.49n by going to \"Help\" > \"Update ImageJ\" and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
+	Dialog.addCheckbox("I want to do it anyway", false);
+	Dialog.show();
+	temp = Dialog.getCheckbox();
+	if (temp == true) exit("Too bad...\n\nThe work-around isn't ready yet");
+	else exit("Downgrade by going to \"Help\" > \"Update ImageJ\" and selecting \"Previous\"");
+	}
 
 
 //Default Variables
@@ -40,10 +45,10 @@ plot = false;
 Dialog.create("Spot Processer");
 
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
-Dialog.addSlider("Bounding Tolerance:", 0, 1, tolerance_bounding);
-Dialog.addSlider("Upward Tolerance:", 0, 1, tolerance_upward);
-Dialog.addSlider("Starting Maxmia:", 0, 200, maxima);
-Dialog.addSlider("Maxmia Tolerance:", 1, 50, tolerance_maxima);
+Dialog.addSlider("Bounding Tolerance(Higher = tighter spots):", 0, 1, tolerance_bounding);
+Dialog.addSlider("Upward Tolerance(Higher = tighter spots):", 0, 1, tolerance_upward);
+Dialog.addSlider("Starting Maxmia(Higher = faster):", 0, 200, maxima);
+Dialog.addSlider("Maxmia Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addCheckboxGroup(2, 2, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results"), newArray(poly, sum_intensity, peak_intensity, plot));
 Dialog.show();
 
@@ -60,11 +65,11 @@ maxima_start = maxima;
 
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.9 || tolerance_bounding > 0.7 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 50) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.1 || tolerance_upward < 0.5 || tolerance_maxima > 10 || maxima > 50) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Tolerance: 0.7 - 0.9  (" + tolerance_bounding + ")\nUpward Tolerance: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Tolerance: 1 - 10  (" + tolerance_maxima + ")");
-	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files to ensure the analysis was done correctly");
+	Dialog.addMessage("Bounding Tolerance: 0.1 - 0.3  (" + tolerance_bounding + ")\nUpward Tolerance: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Tolerance: 1 - 10  (" + tolerance_maxima + ")");
+	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
 
@@ -98,21 +103,41 @@ if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create histogram d
 SNRmain(dir, ""); 
 
 //Save it!
-selectWindow("SNR");
-saveAs("Measurements", outDir + "Results_Raw.csv");
-run("Close");
-selectWindow("Condense");
-saveAs("Measurements", outDir + "Results_Condensed.csv");
-run("Close");
-if (peak_intensity == true) {
-	selectWindow("Peak");
-	saveAs("Measurements", outDir + "Results_PeakIntensity.csv");
+if (indexOf(getVersion(), "1.49n") > -1) {
+	selectWindow("SNR");
+	saveAs("Measurements", outDir + "Results_Raw.csv");
 	run("Close");
+	selectWindow("Condense");
+	saveAs("Measurements", outDir + "Results_Condensed.csv");
+	run("Close");
+	if (peak_intensity == true) {
+		selectWindow("Peak");
+		saveAs("Measurements", outDir + "Results_PeakIntensity.csv");
+		run("Close");
+		}
+	if (sum_intensity == true) {
+		selectWindow("Sum");
+		saveAs("Measurements", outDir + "Results_SumIntensity.csv");
+		run("Close");
+		}
 	}
-if (sum_intensity == true) {
-	selectWindow("Sum");
-	saveAs("Measurements", outDir + "Results_SumIntensity.csv");
+else {
+	selectWindow("SNR");
+	saveAs("Text", outDir + "Results_Raw.csv");
 	run("Close");
+	selectWindow("Condense");
+	saveAs("Text", outDir + "Results_Condensed.csv");
+	run("Close");
+	if (peak_intensity == true) {
+		selectWindow("Peak");
+		saveAs("Text", outDir + "Results_PeakIntensity.csv");
+		run("Close");
+		}
+	if (sum_intensity == true) {
+		selectWindow("Sum");
+		saveAs("Text", outDir + "Results_SumIntensity.csv");
+		run("Close");
+		}
 	}
 
 
@@ -181,7 +206,6 @@ function SNRmain(dir, sub) {
 			window_signal = getImageID();
 			setColor(0);
 			seed = nResults;
-			warnings = 0;
 			
 			//Expand dots
 			if (poly == false) { //Run the faster dots program
