@@ -349,8 +349,8 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	north = yi + r; //North point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++); 
-	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); 
+	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++); 
+	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++); 
 	northeast = r; //Northeast point
 	if (r > 7) warnings = 5;
 	
@@ -359,8 +359,8 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	east = xi + r; //East point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding && r < 3; r++);
-	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
+	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++);
+	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
 	southeast = r; //Southeast point
 	if (r > 7) warnings = 5;
 	
@@ -369,8 +369,8 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	south = yi - r; //South Point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding && r < 3; r++);
-	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
+	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++);
+	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
 	southwest = r; //Southwest point
 	if (r > 7) warnings = 5;
 	
@@ -379,8 +379,8 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	west = xi - r; //West point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++);
-	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
+	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++);
+	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
 	northwest = r; //Northwest point
 	if (r > 7) warnings = 5;
 	
