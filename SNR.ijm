@@ -143,8 +143,6 @@ function SNRmain(dir, sub) {
 			selectImage(window_raw);
 			run("Close");
 			warnings = 0;
-			selectImage(window_raw);
-			run("Close");
 			
 			//Determine Maxima
 			maxima = maximasearch();
