@@ -19,11 +19,10 @@ setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
 print(getVersion());
-<<<<<<< HEAD
+
 if (getVersion() == "1.49n") exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
-=======
 if (endsWith(getVersion(), "1.49n") == true) exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
->>>>>>> parent of d6ca04c... Added Stop for running on 1.49n
+if (endsWith(getVersion(), "1.49n") == true) exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
 
 
 //Default Variables
@@ -91,11 +90,8 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
 outDir = dir + "Out-SNRatio\\";
 File.makeDirectory(outDir); //Create new out directory
-<<<<<<< HEAD
 File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
-=======
 //File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
->>>>>>> parent of d6ca04c... Added Stop for running on 1.49n
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create histogram directory
 
 //RUN IT!
