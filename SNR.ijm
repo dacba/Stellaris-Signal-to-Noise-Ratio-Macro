@@ -201,6 +201,7 @@ function SNRmain(dir, sub) {
 			
 			//Create signal mask image
 			newImage("Signal", "8-bit white", width, height, 1); 
+			selectWindow("Signal");
 			window_signal = getImageID();
 			setColor(0);
 			seed = nResults;
@@ -312,22 +313,22 @@ function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask 
 	bright = getPixel(xi,yi);
 	
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 5; r++); //Progress r until there is a drop in brightness (>10% default)
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 3; r++); //Progress r until there is a drop in brightness (>10% default)
 	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); //Progress r until there is no change in brightness (<10% default)
 	x2 = xi + r; //right
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 5; r--);
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 3; r--);
 	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r > -8; r--);
 	x1 = xi + r; //left
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
 	y2 = yi + r; //top
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 5; r--);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 3; r--);
 	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright < - tolerance_bounding * tolerance_upward) && r > -8; r--);
 	y1 = yi + r; //bottom
 	if (r > 7) warnings = 5;
@@ -343,42 +344,42 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	selectImage(window_zstack);
 	bright = getPixel(xi,yi);
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); 
 	north = yi + r; //North point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding && r < 5; r++); 
+	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++); 
 	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); 
 	northeast = r; //Northeast point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); 
 	east = xi + r; //East point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
 	southeast = r; //Southeast point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi, yi - r)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi, yi - r)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright > tolerance_bounding || getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
 	south = yi - r; //South Point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
 	southwest = r; //Southwest point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi - r, yi)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright > tolerance_bounding || getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
 	west = xi - r; //West point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding && r < 5; r++);
+	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++);
 	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
 	northwest = r; //Northwest point
 	if (r > 7) warnings = 5;
