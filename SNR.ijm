@@ -18,7 +18,6 @@ run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
-
 print(getVersion());
 if (getVersion() == "1.49n") exit("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m by going to Help > Update ImageJ and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
 
@@ -137,13 +136,15 @@ function SNRmain(dir, sub) {
 			window_raw = getImageID();
 			if (nSlices > 1) run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
 			window_zstack = getImageID();
+			selectImage(window_raw);
+			run("Close");
 			warnings = 0;
 			selectImage(window_raw);
 			run("Close");
 			
 			//Determine Maxima
-			selectImage(window_zstack);
 			maxima = maximasearch();
+			selectImage(window_zstack);
 			run("Clear Results");
 			if (peak_intensity == true) {
 				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
@@ -200,6 +201,9 @@ function SNRmain(dir, sub) {
 			run("Make Inverse"); //Make selection inverted
 			roiManager("Add"); //Create Inverse Signal selection
 			
+			selectImage(window_signal);
+			close();
+			
 			//Run signal
 			selectImage(window_zstack);
 			signal();
@@ -225,10 +229,6 @@ function SNRmain(dir, sub) {
 			results();
 			
 			//Save Images
-			selectImage(window_raw);
-			run("Close");
-			selectImage(window_signal);
-			close();
 			selectImage(window_zstack);
 			run("Select None");
 			run("Enhance Contrast", "saturated=0.01"); //Make it pretty
@@ -410,9 +410,8 @@ function maximasearch() { //Searches upwards until spot count levels out
 			}
 		xvalues = Array.slice(xvalues, 1, n);
 		yvalues = Array.slice(yvalues, 1, n);
-		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues);
+		Plot.create(path, "Maxima", "Count", xvalues, yvalues);
 		Plot.show();
-		selectWindow("Plot");
 		saveAs("PNG", outDir + "\\Plots\\" + stripath);
 		close();
 		}
