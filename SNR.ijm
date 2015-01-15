@@ -45,10 +45,10 @@ plot = false;
 Dialog.create("Spot Processer");
 
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
-Dialog.addSlider("Bounding Tolerance(Higher = tighter spots):", 0, 1, tolerance_bounding);
+Dialog.addSlider("Bounding Tolerance(Higher = tighter spots):", 0, 0.5, tolerance_bounding);
 Dialog.addSlider("Upward Tolerance(Higher = tighter spots):", 0, 1, tolerance_upward);
-Dialog.addSlider("Starting Maxmia(Higher = faster):", 0, 200, maxima);
-Dialog.addSlider("Maxmia Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
+Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
+Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addCheckboxGroup(2, 2, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results"), newArray(poly, sum_intensity, peak_intensity, plot));
 Dialog.show();
 
@@ -95,33 +95,13 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
 outDir = dir + "Out-SNRatio\\";
 File.makeDirectory(outDir); //Create new out directory
-File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
-//File.makeDirectory(outDir + "\\Histograms\\"); //Create Histogram directory
-if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create histogram directory
+if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
 
 //RUN IT!
 SNRmain(dir, ""); 
 
 //Save it!
 if (indexOf(getVersion(), "1.49n") > -1) {
-	selectWindow("SNR");
-	saveAs("Measurements", outDir + "Results_Raw.csv");
-	run("Close");
-	selectWindow("Condense");
-	saveAs("Measurements", outDir + "Results_Condensed.csv");
-	run("Close");
-	if (peak_intensity == true) {
-		selectWindow("Peak");
-		saveAs("Measurements", outDir + "Results_PeakIntensity.csv");
-		run("Close");
-		}
-	if (sum_intensity == true) {
-		selectWindow("Sum");
-		saveAs("Measurements", outDir + "Results_SumIntensity.csv");
-		run("Close");
-		}
-	}
-else {
 	selectWindow("SNR");
 	saveAs("Text", outDir + "Results_Raw.csv");
 	run("Close");
@@ -136,6 +116,24 @@ else {
 	if (sum_intensity == true) {
 		selectWindow("Sum");
 		saveAs("Text", outDir + "Results_SumIntensity.csv");
+		run("Close");
+		}
+	}
+else {
+	selectWindow("SNR");
+	saveAs("Measurements", outDir + "Results_Raw.csv");
+	run("Close");
+	selectWindow("Condense");
+	saveAs("Measurements", outDir + "Results_Condensed.csv");
+	run("Close");
+	if (peak_intensity == true) {
+		selectWindow("Peak");
+		saveAs("Measurements", outDir + "Results_PeakIntensity.csv");
+		run("Close");
+		}
+	if (sum_intensity == true) {
+		selectWindow("Sum");
+		saveAs("Measurements", outDir + "Results_SumIntensity.csv");
 		run("Close");
 		}
 	}
@@ -170,8 +168,8 @@ function SNRmain(dir, sub) {
 			warnings = 0;
 			
 			//Determine Maxima
-			maxima = maximasearch();
 			selectImage(window_zstack);
+			maxima = maximasearch();
 			run("Clear Results");
 			if (peak_intensity == true) {
 				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
@@ -286,9 +284,6 @@ function background() { //Measures background, the darkest part, where there are
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
 	run("Create Selection");
 	run("Measure");
-	run("Histogram");
-	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Background.png");
-	close();
 	run("Select None"); //Don't forget to set the File name and description in results
 	} //End of Function
 
@@ -302,9 +297,6 @@ function noise() { //Measures Cell Noise, ensure dots and inverse dots are in th
 	roiManager("Select", newArray(1,2));//Select Inverse dots and Cell Noise
 	roiManager("AND"); //Select regions of Cell Noise and inverse of dots
 	run("Measure");
-	run("Histogram");
-	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Cell_Noise.png");
-	close();
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
 	}//End of Noise function
 
@@ -312,9 +304,6 @@ function signal() { //Measures Signal, ensure dots is in ROI manager, position 0
 	run("Select None");
 	roiManager("Select", 0);
 	run("Measure");
-	run("Histogram");
-	saveAs("PNG", outDir + "\\Histograms\\" + stripath + "_Signal.png");
-	close();
 	run("Select None");
 	} //End of signal function
 
@@ -436,8 +425,9 @@ function maximasearch() { //Searches upwards until spot count levels out
 			}
 		xvalues = Array.slice(xvalues, 1, n);
 		yvalues = Array.slice(yvalues, 1, n);
-		Plot.create(path, "Maxima", "Count", xvalues, yvalues);
+		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues);
 		Plot.show();
+		selectWindow("Plot");
 		saveAs("PNG", outDir + "\\Plots\\" + stripath);
 		close();
 		}
