@@ -21,7 +21,7 @@ run("Clear Results");
 
 if (indexOf(getVersion(), "1.49n") > -1) {
 	Dialog.create("UnCompatible ImageJ Version");
-	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatable with this macro\n \nDowngrade to 1.49m from 1.49n by going to \"Help\" > \"Update ImageJ\" and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
+	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatible with this macro\n \nDowngrade to 1.49m from 1.49n by going to \"Help\" > \"Update ImageJ\" and then\nselecting \"Previous\" at the bottom of the dropdown menu.");
 	Dialog.addCheckbox("I want to do it anyway", false);
 	Dialog.show();
 	temp = Dialog.getCheckbox();
@@ -31,7 +31,7 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 
 
 //Default Variables
-tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter ellipsies 
+tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter ellipsis 
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 50;
 poly = true;
@@ -42,7 +42,7 @@ plot = false;
 
 
 //Dialog
-Dialog.create("Spot Processer");
+Dialog.create("Spot Processor");
 
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
 Dialog.addSlider("Bounding Tolerance(Higher = tighter spots):", 0, 0.5, tolerance_bounding);
@@ -67,7 +67,7 @@ maxima_start = maxima;
 //Warn if Choices are outside of recommended range
 if (tolerance_bounding > 0.3 || tolerance_bounding < 0.1 || tolerance_upward < 0.5 || tolerance_maxima > 10 || tolerance_maxima < 3 || maxima > 50) {
 	Dialog.create("Warning");
-	Dialog.addMessage("One or more of your vairables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
+	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
 	Dialog.addMessage("Bounding Tolerance: 0.1 - 0.3  (" + tolerance_bounding + ")\nUpward Tolerance: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Tolerance: 1 - 10  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
@@ -155,6 +155,23 @@ function SNRmain(dir, sub) {
 			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
 			info = getImageInfo();
 			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1) close(); //If DAPI, ignore
+			/*
+			This will eventually be the call for the segment function
+			print("File: " + path);
+			height = getHeight();
+			width = getWidth();
+			window_raw = getImageID();
+			if (nSlices > 1) { 
+				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+				window_zstack = getImageID();
+				selectImage(window_raw);
+				run("Close");
+				}
+			else window_zstack = window_raw;
+			warnings = 0;
+			
+			segment();
+			*/
 			else {
 			//Initialize Image
 			print("File: " + path);
@@ -271,7 +288,7 @@ function SNRmain(dir, sub) {
 			roiManager("Select", 0);
 			setColor(255);
 			fill();
-			drawString("Cell Noise\nMaxima: " + maxima + "\nSpots: " + seed, 10, 40, 'white');
+			drawString("Maxima Tolerance: " + tolerance_maxima + "\nMaxima: " + maxima + "\nSpots: " + seed, 10, 40, 'white');
 			run("Select None");
 			saveAs("tif", outDir + sub + strip + "_Merge.tif");
 			
@@ -352,7 +369,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	north = yi + r; //North point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++); 
+	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding / 1.414 && r < 3; r++); 
 	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++); 
 	northeast = r; //Northeast point
 	if (r > 7) warnings = 5;
@@ -362,7 +379,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	east = xi + r; //East point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++);
+	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding / 1.414 && r < 3; r++);
 	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
 	southeast = r; //Southeast point
 	if (r > 7) warnings = 5;
@@ -372,7 +389,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	south = yi - r; //South Point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++);
+	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding / 1.414 && r < 3; r++);
 	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
 	southwest = r; //Southwest point
 	if (r > 7) warnings = 5;
@@ -382,7 +399,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 	west = xi - r; //West point
 	if (r > 7) warnings = 5;
 	
-	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding * 1.414 && r < 3; r++);
+	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding / 1.414 && r < 3; r++);
 	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
 	northwest = r; //Northwest point
 	if (r > 7) warnings = 5;
@@ -447,7 +464,7 @@ function maximasearch() { //Searches upwards until spot count levels out
 	return maxima;
 	}
 
-function results() {
+function results() { //String Manipulation and Saves results to tables
 	//Calculate signal to noise ratio
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1));
 	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1));
@@ -502,6 +519,46 @@ function results() {
 	run("Clear Results");
 	}
 
+function segment() { //Segments image based off of DAPI channel
+	selectImage(window_zstack);
+	//Create Binary Image
+	run("Duplicate...", "title=Binary");
+	run("Make Binary");
+	run("Create Selection");
+	run("Enlarge...", "enlarge=-5 pixel");
+	run("Enlarge...", "enlarge=5 pixel");
+	run("Make Inverse");
+	setColor(255);
+	run("Fill", "slice");
+	
+	//Create Voronoi image
+	run("Duplicate...", "title=Voronoi");
+	run("Voronoi");
+	
+	//Get locations of all of the nuclei
+	selectWindow("Binary");
+	run("Find Maxima...", "noise=254 output=List light"); 
+	
+	//Create Selections
+	selectWindow("Voronoi");
+	for (n = 0; n < nResults; n++) {
+		run("Select None");
+		dowand(getResult("X", n), getResult("Y", n));
+		roiManager("Add");
+		}
+	
+	//Merge and draw numbers on each cell
+	selectImage(window_zstack);
+	run("Close");
+	run("Images to Stack", "name=Stack title=[] use");
+	window_stack = getImageID();
+	run("Z Project...", "projection=[Max Intensity]");
+	selectImage(window_stack);
+	run("Close");
+	for (n = 0; n < nResults; n++ ) drawString(n, getResult("X", n), getResult("Y", n), 'white');
+	
+	
+	}
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
