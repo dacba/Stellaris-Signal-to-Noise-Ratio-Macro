@@ -153,24 +153,7 @@ function SNRmain(dir, sub) {
 			stripath = replace(substring(path, 0, indexOf(path, ".nd2")), "/", "_");
 			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
 			info = getImageInfo();
-			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1) close(); //If DAPI, ignore
-			/*
-			This will eventually be the call for the segment function
-			print("File: " + path);
-			height = getHeight();
-			width = getWidth();
-			window_raw = getImageID();
-			if (nSlices > 1) { 
-				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
-				window_zstack = getImageID();
-				selectImage(window_raw);
-				run("Close");
-				}
-			else window_zstack = window_raw;
-			warnings = 0;
-			
-			segment();
-			*/
+			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1) close(); 
 			else {
 			//Initialize Image
 			print("File: " + path);
