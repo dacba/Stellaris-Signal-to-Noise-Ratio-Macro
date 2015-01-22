@@ -25,8 +25,7 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 	Dialog.addCheckbox("I want to do it anyway", false);
 	Dialog.show();
 	temp = Dialog.getCheckbox();
-	if (temp == true) exit("Too bad...\n\nThe work-around isn't ready yet");
-	else exit("Downgrade by going to \"Help\" > \"Update ImageJ\" and selecting \"Previous\"");
+	if (temp == false) exit("Downgrade by going to \"Help\" > \"Update ImageJ\" and selecting \"Previous\"");
 	}
 
 
@@ -35,7 +34,7 @@ tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 50;
 poly = true;
-tolerance_maxima = 3;
+tolerance_maxima = 5;
 sum_intensity = true;
 peak_intensity = false;
 plot = false;
