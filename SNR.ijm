@@ -518,46 +518,6 @@ function results() { //String Manipulation and Saves results to tables
 	run("Clear Results");
 	}
 
-function segment() { //Segments image based off of DAPI channel
-	selectImage(window_zstack);
-	//Create Binary Image
-	run("Duplicate...", "title=Binary");
-	run("Make Binary");
-	run("Create Selection");
-	run("Enlarge...", "enlarge=-5 pixel");
-	run("Enlarge...", "enlarge=5 pixel");
-	run("Make Inverse");
-	setColor(255);
-	run("Fill", "slice");
-	
-	//Create Voronoi image
-	run("Duplicate...", "title=Voronoi");
-	run("Voronoi");
-	
-	//Get locations of all of the nuclei
-	selectWindow("Binary");
-	run("Find Maxima...", "noise=254 output=List light"); 
-	
-	//Create Selections
-	selectWindow("Voronoi");
-	for (n = 0; n < nResults; n++) {
-		run("Select None");
-		dowand(getResult("X", n), getResult("Y", n));
-		roiManager("Add");
-		}
-	
-	//Merge and draw numbers on each cell
-	selectImage(window_zstack);
-	run("Close");
-	run("Images to Stack", "name=Stack title=[] use");
-	window_stack = getImageID();
-	run("Z Project...", "projection=[Max Intensity]");
-	selectImage(window_stack);
-	run("Close");
-	for (n = 0; n < nResults; n++ ) drawString(n, getResult("X", n), getResult("Y", n), 'white');
-	
-	
-	}
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
