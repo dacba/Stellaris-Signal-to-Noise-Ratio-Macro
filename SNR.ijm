@@ -36,7 +36,7 @@ tolerance_bounding = 0.1; //Tolerance for ellipse bounding. Higher means tighter
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
 poly = true;
-tolerance_maxima = 10;
+tolerance_maxima = 5;
 sum_intensity = true;
 peak_intensity = false;
 plot = false;
@@ -496,12 +496,6 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1);
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1);
 	
-	/*if (getResult("Area", nResults - 3) >= getResult("Area", nResults - 2)) { //If signal area is greater than noise area something very bad happened
-		signoimean = "inf";
-		signoimedian = "inf";
-		noirel = 0;
-		} //Shouldn't happen any longer*/ 
-	
 	//Set results
 	setResult("Mean StN Ratio", nResults - 3, signoimean);
 	setResult("Median StN Ratio", nResults - 3, signoimedian);
@@ -512,16 +506,14 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Maxima", nResults - 3, maxima);
 	//Set Warnings
 	/*Warning Codes
-	1 = Low spot count
+	1 = Low spot count (Suspicious)
 	2 = Maxima is too high
-	4 = Signal Area >= Noise Area //No longer used
-	5 = Largly Bound Spot(s)
+	4 = Largly Bound Spots
 	*/
 	warnings = 0;
 	if (getResult("Spots", nResults - 3) < 100) warnings += 1;
-	if (getResult("Bad Spots", nResults - 3) > 0) warnings += 5;
+	if (getResult("Bad Spots", nResults - 3) > 20) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
-	if (noirel == 0) warnings += 4;
 	if (warnings > 0) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
 	
