@@ -104,7 +104,7 @@ File.makeDirectory(outDir); //Create new out directory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
 
 //RUN IT!
-SNRmain(dir, ""); 
+SNR_main(dir, ""); 
 
 //Save it!
 if (indexOf(getVersion(), "1.49n") > -1) { //Save as Text if running 1.49n
@@ -145,7 +145,7 @@ else { //Save as Measurement csv file if running 1.49m
 	}
 
 
-function SNRmain(dir, sub) {
+function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list 
 	n = 0;
@@ -153,7 +153,7 @@ function SNRmain(dir, sub) {
 		path = sub + list[i];
 		if (endsWith(list[i], "/") && indexOf(path, "Out") == -1) {
 			File.makeDirectory(outDir + path); //Recreate file system in output folder
-			SNRmain(dir, path); //Recursive Step
+			SNR_main(dir, path); //Recursive Step
 			}
 		else if (endsWith(list[i], ".nd2")) {
 			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
@@ -178,7 +178,7 @@ function SNRmain(dir, sub) {
 			
 			//Determine Maxima
 			selectImage(window_zstack);
-			maxima = maximasearch();
+			maxima = SNR_maximasearch();
 			run("Clear Results");
 			
 			//Run peak intensity and Sum intensity measurments
@@ -223,12 +223,12 @@ function SNRmain(dir, sub) {
 			//Expand dots
 			if (poly == false) { //Run the faster dots program
 				for (q = 0; q < nResults && q < 2500; q++) {
-					dots(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
+					SNR_dots(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			else { //Run the slower polygon program
 				for (q = 0; q < nResults && q < 2500; q++) {
-					crazypoly(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
+					SNR_polygon(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			
@@ -246,27 +246,27 @@ function SNRmain(dir, sub) {
 			
 			//Run signal
 			selectImage(window_zstack);
-			signal();
+			SNR_signal();
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Signal");
 			updateResults();
 			
 			//Run Noise
 			selectImage(window_zstack);
-			noise(); 
+			SNR_noise(); 
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Cell Noise");
 			updateResults();
 			
 			//Run Background
 			selectImage(window_zstack);
-			background();
+			SNR_background();
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Background");
 			updateResults();
 			
 			//Results
-			results();
+			SNR_results();
 			
 			//Save Images
 			selectImage(window_zstack);
@@ -296,7 +296,7 @@ function SNRmain(dir, sub) {
 	}//end of function
 
 
-function background() { //Measures background, the darkest part, where there are no cells
+function SNR_background() { //Measures background, the darkest part, where there are no cells
 	run("Select None");
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
 	run("Create Selection");
@@ -304,7 +304,7 @@ function background() { //Measures background, the darkest part, where there are
 	run("Select None"); //Don't forget to set the File name and description in results
 	} //End of Function
 
-function noise() { //Measures Cell Noise, ensure dots and inverse dots are in the ROI manager, positions 0 and 1 respectively
+function SNR_noise() { //Measures Cell Noise, ensure dots and inverse dots are in the ROI manager, positions 0 and 1 respectively
 	run("Select None");
 	setAutoThreshold("Default dark"); //Threshold cell noise
 	run("Create Selection"); //Create selection 2
@@ -317,14 +317,14 @@ function noise() { //Measures Cell Noise, ensure dots and inverse dots are in th
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
 	}//End of Noise function
 
-function signal() { //Measures Signal, ensure dots is in ROI manager, position 0
+function SNR_signal() { //Measures Signal, ensure dots is in ROI manager, position 0
 	run("Select None");
 	roiManager("Select", 0);
 	run("Measure");
 	run("Select None");
 	} //End of signal function
 
-function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
+function SNR_dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
 	selectImage(window_zstack);
 	bright = getPixel(xi,yi);
 	cap = 0;
@@ -362,7 +362,7 @@ function dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask 
 		}
 	}//End of dot function
 
-function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws polygon on mask image
+function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws polygon on mask image
 	selectImage(window_zstack);
 	bright = getPixel(xi,yi);
 	cap = 0;
@@ -418,7 +418,7 @@ function crazypoly(xi, yi) { //Searches in eight cardinal directions and draws p
 		}
 	}//End of crazy polygon function
 
-function maximasearch() { //Searches upwards until spot count levels out
+function SNR_maximasearch() { //Searches upwards until spot count levels out
 	maxima = maxima_start;
 	slope = newArray();
 	slope_second = newArray();
@@ -489,7 +489,7 @@ function maximasearch() { //Searches upwards until spot count levels out
 	return maxima;
 	}
 
-function results() { //String Manipulation and Saves results to tables
+function SNR_results() { //String Manipulation and Saves results to tables
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1));
 	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1));
