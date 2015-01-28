@@ -266,7 +266,7 @@ function SNR_main(dir, sub) {
 			updateResults();
 			
 			//Results
-			SNR_results();
+			signoimedian = SNR_results();
 			
 			//Save Images
 			selectImage(window_zstack);
@@ -284,7 +284,7 @@ function SNR_main(dir, sub) {
 			roiManager("Select", 0);
 			setColor(255);
 			fill();
-			drawString("Maxima Tolerance: " + tolerance_maxima + "\nMaxima: " + maxima + "\nSpots: " + spot_count + "/" + bad_spots, 10, 40, 'white');
+			drawString("SNR: " + signoimedian + "\nMaxima: " + maxima + "\nSpots: " + spot_count + "/" + bad_spots, 10, 40, 'white');
 			run("Select None");
 			saveAs("tif", outDir + sub + strip + "_Merge.tif");
 			
@@ -540,6 +540,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	String.append(String.paste); //Append results to buffer from clipboard 
 	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
+	
+	return signoimedian;
 	}
 
 print("-- Done --");
