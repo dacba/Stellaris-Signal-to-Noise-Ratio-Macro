@@ -47,10 +47,10 @@ count_bad = false;
 Dialog.create("Spot Processor");
 
 Dialog.addMessage("Please enter the bounding tolerance, upward tolerance and Maxima Tolerance");
-Dialog.addSlider("Bounding Tolerance(Higher = tighter spots):", 0, 0.5, tolerance_bounding);
-Dialog.addSlider("Upward Tolerance(Higher = tighter spots):", 0, 1, tolerance_upward);
+Dialog.addSlider("Bounding Stringency(Higher = tighter spots):", 0, 0.5, tolerance_bounding);
+Dialog.addSlider("Upward Stringency(Higher = tighter spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
-Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
+Dialog.addSlider("Maxima Stringency(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Include Large Spots"), newArray(poly, sum_intensity, peak_intensity, plot, count_bad));
 Dialog.show();
 
@@ -205,7 +205,7 @@ function SNR_main(dir, sub) {
 				for (n = 1; n < nResults; n++) String.append(getResult("Sum Intensity", n) + ", ");
 				print("[Sum]", String.buffer);
 				}
-			if (peak_intensity == false && sum_intensity == false) {
+			if (peak_intensity == false && sum_intensi ty == false) {
 				run("Clear Results");
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
@@ -329,25 +329,25 @@ function SNR_dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on m
 	bright = getPixel(xi,yi);
 	cap = 0;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 3; r++); //Progress r until there is a drop in brightness (>10% default)
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); //Progress r until there is no change in brightness (<10% default)
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 8; r++); //Progress r until there is a drop in brightness (>10% default)
+	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); //Progress r until there is no change in brightness (<10% default)
 	x2 = xi + r; //right
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 3; r--);
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r > -8; r--);
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r > -8; r--);
+	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r > -15; r--);
 	x1 = xi + r; //left
-	if (r >= 5) cap ++;
+	if (r <= -5) cap ++;
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 3; r++);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 8; r++);
+	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	y2 = yi + r; //top
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 3; r--);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright < - tolerance_bounding * tolerance_upward) && r > -8; r--);
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r > -8; r--);
+	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright < - tolerance_bounding * tolerance_upward) && r > -15; r--);
 	y1 = yi + r; //bottom
-	if (r >= 5) cap ++;
+	if (r <= -5) cap ++;
 	
 	w = x2-x1;
 	h = y2-y1;
@@ -367,43 +367,43 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 	bright = getPixel(xi,yi);
 	cap = 0;
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 5; r++);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); 
+	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 8; r++);
+	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); 
 	north = yi + r; //North point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding / 1.414 && r < 5; r++); 
-	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++); 
+	for (r = 0; getPixel(xi + r, yi + r)/bright > 1 - tolerance_bounding / 1.414 && r < 8; r++); 
+	for (r = r; (getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi + r)/bright - getPixel(xi + r + 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 15; r++); 
 	northeast = r; //Northeast point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 5; r++);
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++); 
+	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 8; r++);
+	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); 
 	east = xi + r; //East point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding / 1.414 && r < 5; r++);
-	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
+	for (r = 0; getPixel(xi + r, yi - r)/bright > 1 - tolerance_bounding / 1.414 && r < 8; r++);
+	for (r = r; (getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi + r, yi - r)/bright - getPixel(xi + r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 15; r++);
 	southeast = r; //Southeast point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi, yi - r)/bright > 1 - tolerance_bounding && r < 5; r++);
-	for (r = r; (getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright > tolerance_bounding || getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
+	for (r = 0; getPixel(xi, yi - r)/bright > 1 - tolerance_bounding && r < 8; r++);
+	for (r = r; (getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright > tolerance_bounding || getPixel(xi, yi - r)/bright - getPixel(xi, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	south = yi - r; //South Point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding / 1.414 && r < 5; r++);
-	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
+	for (r = 0; getPixel(xi - r, yi - r)/bright > 1 - tolerance_bounding / 1.414 && r < 8; r++);
+	for (r = r; (getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi - r)/bright - getPixel(xi - r + 1, yi - r - 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 15; r++);
 	southwest = r; //Southwest point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi - r, yi)/bright > 1 - tolerance_bounding && r < 5; r++);
-	for (r = r; (getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright > tolerance_bounding || getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 8; r++);
+	for (r = 0; getPixel(xi - r, yi)/bright > 1 - tolerance_bounding && r < 8; r++);
+	for (r = r; (getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright > tolerance_bounding || getPixel(xi - r, yi)/bright - getPixel(xi - r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
 	west = xi - r; //West point
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding / 1.414 && r < 5; r++);
-	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 8; r++);
+	for (r = 0; getPixel(xi - r, yi + r)/bright > 1 - tolerance_bounding / 1.414 && r < 8; r++);
+	for (r = r; (getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright > tolerance_bounding * 1.414 || getPixel(xi - r, yi + r)/bright - getPixel(xi - r - 1, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward * 1.414) && r < 15; r++);
 	northwest = r; //Northwest point
 	if (r >= 5) cap ++;
 	
