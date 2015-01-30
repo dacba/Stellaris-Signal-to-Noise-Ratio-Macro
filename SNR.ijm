@@ -1,14 +1,16 @@
-
-macro "Calculate Signal to Noise Ratio...[c]" {
+macro "Calculate Signal to Noise Ratio v0.1...[c]" {
 /*
-This macro opens a directory and does an in depth analysis of spots
+2015-1-30
+Version 0.1 - for in-house use only, do not distribute
+
+This macro opens a directory and does an in analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
 Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
 Use the Default threshold to determine cell noise and background values
 
-Tested on ImageJ version 1.49m
+Tested on ImageJ version 1.490
 Works on 1.49m and 1.49o
-1.49n does not work as intended
+!!!1.49n does not work as intended!!!
 */
 
 //Initialize
@@ -46,11 +48,11 @@ count_bad = false;
 //Dialog
 Dialog.create("Spot Processor");
 
-Dialog.addMessage("Please enter the bounding Stringency, upward Stringency and Maxima Stringency");
+Dialog.addMessage("Please enter the Bounding Stringency, Upward Stringency and Maxima Tolerance");
 Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tolerance_bounding);
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
-Dialog.addSlider("Maxima Stringency(Higher = More Spots):", 1, 50, tolerance_maxima);
+Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Include Large Spots"), newArray(poly, sum_intensity, peak_intensity, plot, count_bad));
 Dialog.show();
 
@@ -84,13 +86,13 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Initialize SNR table
-if (poly == false ) print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Stringency: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
-else print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Stringency: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
+if (poly == false ) print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
+else print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
 print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Condensed Table
-if (poly == false ) print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Stringency: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
-else print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Stringency: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
+if (poly == false ) print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
+else print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
 print("[Condense]", "File, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Peak and Sum intensity tables if option was chosen
@@ -667,7 +669,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	/*Warning Codes
 	1 = Low spot count (Suspicious)
 	2 = Maxima is too high
-	4 = Largly Bound Spots
+	4 = Largely Bound Spots
 	*/
 	warnings = 0;
 	if (getResult("Spots", nResults - 3) < 100) warnings += 1;

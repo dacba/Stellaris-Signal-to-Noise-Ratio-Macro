@@ -1,7 +1,9 @@
 Fiji/ImageJ Stellaris StN Ratio Macro
 =============
 
-This repository contains the Crazydot.ijm macro for Fiji/ImageJ
+#This README is out of date and no longer applies to the current version
+
+This repository contains the SNR.ijm macro for Fiji/ImageJ
 This macro calculates the signal to noise ratio of a Stellaris RNA FISH Experiment given the raw .nd2 files.
 
 ## How it works:
