@@ -7,79 +7,63 @@ This repository contains the SNR.ijm macro for Fiji/ImageJ
 This macro calculates the signal to noise ratio of a Stellaris RNA FISH Experiment given the raw .nd2 files.
 
 ## How it works:
-The user is queried for the Bounding tolerance, upward tolerance, and Z-score range, as well as the Polygon spot creation checkbox.
-Files are opened by the macro for processing.  If the image is a Z stack and needs to be compressed, it is MaxIP merged.  The local maxima is found using the find maxima command and the derivative function.  The x and y values are fed, pair-by-pair into the dots or crazypoly function depending on the user input.
-The crazypoly/dots function draws polygons or ellipsies (respectively) to the signal mask image. After all x and y values have been analyzed the signal mask is created and stored in the ROI manager, along with its inverse.  The signal, noise and background functions are called to measure and calculate the areas selected.
-The results function is called and the images are stacked and saved as an 8-bit tif file.
+The user is queried for the Bounding Stringency, Upward Stringency, Starting Maxima, and Maxima Tolerance.
+Files are opened by the macro for processing.  If the image is a Z stack and needs to be compressed, it is MaxIP merged.  The local maxima is found using the find maxima command.  The x and y values are fed, pair-by-pair into the dots or polygon function for masking.
+The polygon/dots function draws polygons or ellipsies to the signal mask image. After all x and y values have been analysed the signal mask is created and stored in the ROI manager, along with its inverse.  The signal, noise and background functions are called to measure the areas selected.
+The results function calculates the relative Signal brightness, Noise Brightness and Signal to Noise Ratio. After, a tif with two pages, containing the raw image and selections is created for troubleshooting and verification purposes.
+
 
 ## Input:
 
 ### User input
 
-#### Bounding Tolerance
-- Default = 0.1
-- Determines the stringency of the bounding functions, lower meaning more strict
-- Means the brightness has to drop to 90% of the center, then the change in brightness has to be below 10%
+#### Bounding Stringency
+- Default = 0.25
+- Determines the stringency of the bounding functions, higher meaning more strict
 
-#### Upward Tolerance
+#### Upward Stringency
 - Default = 0.8
 - Determines the stringency of the bounding function for upwards movement
-- Means the brightness can rise 0.8 as much and still continue, allows for more lenient upward movement
-- Best if dots are close together
 
-#### Z-Score
-- Default = -0.5
-- Determines the maxima value
-- Means the derivative function will output a value 0.5 standard deviation points below the median, instead of the median
-- 0 means it will output the median, 1.0 will output one standard deviation point above the median, etc...
+#### Starting Maxima
+- Default = 20
+- Determines where the program starts looking for the right Noise value to plug into the find maxima tool
 
-#### Polygon checkbox
-- Default = Unchecked
-- Determines if the polygon function or ellipse function will be used
-- Ellipse function is very quick
-- Polygon function takes much longer (~3x)
-
-### Files
-- Unprocessed Z Stacks in a file system, .nd2 files from a Nikon Ti Florescent Microscope
+### Folder
+- The use is queried for the location of the files.
+- Only non-DAPI channel nd2 files will be processed
 
 
 ## Output:
 
 ### Output folder - "Out-SNRatio"
-- Recreation of the target file system directory
-- Within the folders contain the Merged images from analysis
-- The results .csv file containing the information from the analysis
-- The analysis pictures are 8-bit tif files containing 5 images...
-	- the raw image (auto contrast)
-	- First derivative of the raw image
-	- Signal Mask, in black
-	- Cell Noise, in white
-	- Local Maxima Points
+Contains...
+1. Recreation of the target file system directory containing the merged images from analysis
+2. The results .csv files containing the information from the analysis
 
 
 ## Functions:
 
-### process(dir, sub)
+### SNR_main(dir, sub)
 - Main recursive function
 - Calls all other functions and handles file and window manipulation
 - Saves images
 
-### background()
+### SNR_background()
 - Measures background, the darkest part of the image
 - Uses setAutoThreshold("Default")
 	- More information on the Default algorithm can be found on the ImageJ website
 	- Default was chosen due to its optimal selection of background pixels
-- Creates a histogram of the background pixels selected
 
-### noise()
+### SNR_noise()
 - Measures the cell noise of the image
-- Uses the roi manager to select the inverse of the dots and default dark selection
-- Creates histogram of the pixels selected
+- Uses the roi manager to select the inverse of the dots and the default dark threshold selection
 
-### signal()
+### SNR_signal()
 - Measures the signal from the signal mask
 
-### dots(xi, yi)
+### SNR_dots(xi, yi)
+Note: This function is dated and slated for removal
 - Searches N, S, E, and W from the given XY coordinates until the change in brightness is less than the tolerance (0.1 default)
 - Calculates the change in brightness as relative to the central pixel(the brightest)
 - Split into two steps
@@ -87,15 +71,19 @@ The results function is called and the images are stacked and saved as an 8-bit 
 	- Second step progresses until the change in brightness is less 10% of the brightest pixel
 - Draws an ellipse around the signal dot
 
-### crazypoly(xi, yi)
-- Same as dots except it searches in the NE, SE, SW, and NW directions, and draws a polygon
+### SNR_polygon(xi, yi)
+- Similar to dots
+- Uses the average difference in change of brightness in a 3 pixel window
 
 ### derivative()
-- Creates the first derivative image of the raw image
-	- Derivative image only measures positive change
-	- MaxEntropy dark Threshold is used to select the brightest spots
-	- Measure is used to find the maxima
-	- The median value minus 0.5 of the standard deviation is returned
+- Removed
+
+### SNR_maximasearch()
+- Searches for the right Noise value via a window of 4 previous count results
+- Starts at the maxima start vairable and moves upward by 5
+- Searches for where the graph becomes linear
+- Once the second derivative drops below the maxima tolerance divided by ten, it stops searching
 
 ### results()
-- Calculates the signal to noise ratio and transfers the results to a storage table
+- Calculates the signal to noise ratio, Relative Signal and Noise, Creates warning codes
+- Saves these results to the Raw table then the Condensed Table
