@@ -305,7 +305,6 @@ function SNR_main(dir, sub) {
 		}//end of for loop
 	}//end of function
 
-
 function SNR_background() { //Measures background, the darkest part, where there are no cells
 	run("Select None");
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
