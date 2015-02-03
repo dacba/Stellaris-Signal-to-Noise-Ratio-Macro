@@ -43,7 +43,10 @@ sum_intensity = true;
 peak_intensity = false;
 plot = false;
 count_bad = false;
-
+//Advanced Options
+advanced = false;
+output = "Out-SNRatio";
+objective = 60;
 
 //Dialog
 Dialog.create("Spot Processor");
@@ -53,7 +56,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Include Large Spots"), newArray(poly, sum_intensity, peak_intensity, plot, count_bad));
+Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Include Large Spots", "Advanced Options"), newArray(poly, sum_intensity, peak_intensity, plot, count_bad, advanced));
 Dialog.show();
 
 //Retrieve Choices
@@ -66,8 +69,16 @@ sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
 count_bad = Dialog.getCheckbox();
+advanced = Dialog.getCheckbox();
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
+
+if (poly == false) {
+	Dialog.create("Warning");
+	Dialog.addMessage("The Ellipse function is running an older algorithm for bounding.");
+	Dialog.addMessage("If you wish to continue using the Ellipse function instead of the Polygon function, please reduce the Bounding Stringency to 0.1 instead 0.25.");
+	Dialog.show();	
+	}
 
 //Warn if Choices are outside of recommended range
 if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 20 || tolerance_maxima < 3 || maxima > 50) {
@@ -78,6 +89,19 @@ if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0
 	Dialog.show();
 	}
 
+if (advanced == true) { //Advanced Options Dialog
+	waitForUser("Advanced Options\n\nSome advanced options will break the macro\nOnly change settings if you know what you're doing");
+	
+	Dialog.create("Advanced Options (Placeholder options only)");
+	Dialog.addString("Output Folder Name:", output);
+	Dialog.addChoice("Objective Magnification", newArray(60, 100));
+	Dialog.show();
+	
+	output = Dialog.getString();
+	objective = Dialog.getChoice();
+	objective /= 60;
+	objective = 1 / objective;
+	}
 
 //Open Tables
 run("Table...", "name=SNR width=400 height=200");
@@ -88,12 +112,12 @@ run("Table...", "name=Condense width=400 height=200");
 //Initialize SNR table
 if (poly == false ) print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
 else print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
+print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Condensed Table
 if (poly == false ) print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
 else print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-print("[Condense]", "File, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
+print("[Condense]", "File, Coefficient of Variation, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Peak and Sum intensity tables if option was chosen
 if (peak_intensity == true) print("[Peak]", "Peak Brightness");
@@ -569,8 +593,8 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 	if (cap <= 3 || count_bad == true) {
 		selectImage(window_signal);
 		makePolygon(xi, north, xi + northeast, yi + northeast, east, yi, xi + southeast, yi - southeast, 	xi, south, xi - southwest, yi - southwest, west, yi, xi - northwest, yi + northwest);
-		fill();
 		//exit();
+		fill();
 		}
 	else {
 		spot_count --;
@@ -655,8 +679,12 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1));
 	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1);
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1);
+	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	
 	//Set results
+	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
+		setResult("Coefficient of Variation", nResults - m, getResult("StdDev", nResults - m) / getResult("Mean", nResults - m));
+		}
 	setResult("Mean StN Ratio", nResults - 3, signoimean);
 	setResult("Median StN Ratio", nResults - 3, signoimedian);
 	setResult("Median Signal - Background", nResults - 3, sigrel);
@@ -664,17 +692,24 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Spots", nResults - 3, spot_count);
 	setResult("Bad Spots", nResults - 3, bad_spots);
 	setResult("Maxima", nResults - 3, maxima);
+	
 	//Set Warnings
 	/*Warning Codes
 	1 = Low spot count (Suspicious)
 	2 = Maxima is too high
 	4 = Largely Bound Spots
+	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
 	*/
 	warnings = 0;
+	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.15 then warn user
+		if (getResult("Coefficient of Variation", nResults - m) > 0.15) setResult("Warning Code", nResults - m, 8);
+		}
+	if (getResult("Mean", nResults - 3) / getResult("StdDev", nResults - 3) > 0.2) warnings += 8;
 	if (getResult("Spots", nResults - 3) < 100) warnings += 1;
 	if (getResult("Bad Spots", nResults - 3) > 20) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
 	if (warnings > 0) setResult("Warning Code", nResults - 3, warnings);
+	if ((getResult("Warning Code", nResults - 1) == 8 || getResult("Warning Code", nResults - 2) == 8) && getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3) <= 0.15) warnings += 8; //If the Noise or background has a bad cv and the signal didn't, warn in condensed file
 	updateResults();
 	
 	//String manipulation and saving to SNR table
@@ -686,6 +721,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	
 	//Save Condensed Results
 	setResult("File", nResults, path);
+	setResult("Signal Coefficient of Varation", nResults - 1, cv);
 	setResult("Mean StN Ratio", nResults - 1, signoimean);
 	setResult("Median StN Ratio", nResults - 1, signoimedian);
 	setResult("Median Signal - Background", nResults - 1, sigrel);
