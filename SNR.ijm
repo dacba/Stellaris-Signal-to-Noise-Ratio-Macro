@@ -1,15 +1,14 @@
-macro "Calculate Signal to Noise Ratio v0.1...[c]" {
+macro "Calculate Signal to Noise Ratio v0.2...[c]" {
 /*
-2015-1-30
-Version 0.1 - for in-house use only, do not distribute
+2015-2-4
+Version 0.2 - for in-house use only, do not distribute
 
 This macro opens a directory and does an in analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
 Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
 Use the Default threshold to determine cell noise and background values
 
-Tested on ImageJ version 1.490
-Works on 1.49m and 1.49o
+Tested on ImageJ version 1.49o
 !!!1.49n does not work as intended!!!
 */
 
@@ -38,7 +37,7 @@ tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smalle
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
 poly = true;
-tolerance_maxima = 5;
+tolerance_maxima = 4;
 sum_intensity = true;
 peak_intensity = false;
 plot = false;
@@ -56,7 +55,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Include Large Spots", "Advanced Options"), newArray(poly, sum_intensity, peak_intensity, plot, count_bad, advanced));
+Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Advanced Options"), newArray(poly, sum_intensity, peak_intensity, plot, advanced));
 Dialog.show();
 
 //Retrieve Choices
@@ -68,16 +67,21 @@ poly = Dialog.getCheckbox();
 sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
-count_bad = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
+
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
+warning_cvspot = 0.5;
+warning_cvnoise = 0.25;
+warning_spot = 100;
+warning_badspot = 20;
+warning_disable = false;
 
 if (poly == false) {
 	Dialog.create("Warning");
 	Dialog.addMessage("The Ellipse function is running an older algorithm for bounding.");
-	Dialog.addMessage("If you wish to continue using the Ellipse function instead of the Polygon function, please reduce the Bounding Stringency to 0.1 instead 0.25.");
-	Dialog.show();	
+	Dialog.addMessage("If you wish to continue using the Ellipse function instead of the Polygon function, press \"Cancel\" and reduce the Bounding Stringency to 0.1 instead 0.25.");
+	Dialog.show();
 	}
 
 //Warn if Choices are outside of recommended range
@@ -95,12 +99,27 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.create("Advanced Options (Placeholder options only)");
 	Dialog.addString("Output Folder Name:", output);
 	Dialog.addChoice("Objective Magnification", newArray(60, 100));
+	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
+	Dialog.addCheckboxGroup(1, 2, newArray("Include Large Spots", "Disable Warning Codes"), newArray(count_bad, warning_disable));
+	Dialog.addMessage("Warning Cutoffs");
+	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
+	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
+	Dialog.addSlider("Suspicious Spot Count", 0, 200, warning_spot);
+	Dialog.addSlider("Bad Spot Count", 0, 50, warning_badspot);
 	Dialog.show();
 	
 	output = Dialog.getString();
 	objective = Dialog.getChoice();
 	objective /= 60;
 	objective = 1 / objective;
+	tolerance_drop = Dialog.getNumber();
+	count_bad = Dialog.getCheckbox();
+	warning_disable = Dialog.getCheckbox();
+	warning_cvspot = Dialog.getNumber();
+	warning_cvnoise = Dialog.getNumber();
+	warning_spot = Dialog.getNumber();
+	warning_badspot = Dialog.getNumber();
+	
 	}
 
 //Open Tables
@@ -125,7 +144,7 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
 dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
-outDir = dir + "Out-SNRatio\\";
+outDir = dir + output + "\\";
 File.makeDirectory(outDir); //Create new out directory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
 
@@ -177,7 +196,7 @@ function SNR_main(dir, sub) {
 	n = 0;
 	for (i=0;i<list.length; i++){ //for each file
 		path = sub + list[i];
-		if (endsWith(list[i], "/") && indexOf(path, "Out") == -1) {
+		if (endsWith(list[i], "/") && indexOf(path, output) == -1) {
 			File.makeDirectory(outDir + path); //Recreate file system in output folder
 			SNR_main(dir, path); //Recursive Step
 			}
@@ -186,21 +205,21 @@ function SNR_main(dir, sub) {
 			stripath = replace(substring(path, 0, indexOf(path, ".nd2")), "/", "_");
 			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
 			info = getImageInfo();
-			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1) close(); //Close if it's the DAPI channel
+			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice
 			else {
 			//Initialize Image
 			print("File: " + path);
 			height = getHeight();
 			width = getWidth();
 			window_raw = getImageID();
-			if (nSlices > 1) { 
-				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
-				window_zstack = getImageID();
-				selectImage(window_raw);
-				run("Close");
-				}
-			else window_zstack = window_raw;
-			warnings = 0;
+			run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+			window_MaxIP = getImageID();
+			selectImage(window_raw);
+			run("Z Project...", "projection=Median"); //Max intensity merge
+			window_Median = getImageID();
+			run("Gaussian Blur...", "sigma=3");
+			selectImage(window_raw);
+			run("Close");
 			
 			//Get Median Background Level
 			SNR_background();
@@ -208,7 +227,7 @@ function SNR_main(dir, sub) {
 			run("Clear Results");
 			
 			//Determine Maxima
-			selectImage(window_zstack);
+			selectImage(window_MaxIP);
 			maxima = SNR_maximasearch();
 			run("Clear Results");
 			
@@ -226,7 +245,7 @@ function SNR_main(dir, sub) {
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				setResult("Sum Intensity", 0, 0);
 				for (q = 0; q < nResults; q++) {
-					selectImage(window_zstack);
+					selectImage(window_MaxIP);
 					makeOval(getResult("X", q), getResult("Y", q), 5, 5);
 					getRawStatistics(nPixels, mean, dummy, dummy, dummy, dumb);
 					setResult("Sum Intensity", q, nPixels * mean);
@@ -275,41 +294,49 @@ function SNR_main(dir, sub) {
 			close();
 			
 			//Run signal
-			selectImage(window_zstack);
 			SNR_signal();
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Signal");
 			updateResults();
 			
 			//Run Noise
-			selectImage(window_zstack);
 			SNR_noise(); 
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Cell Noise");
 			updateResults();
 			
 			//Run Background
-			selectImage(window_zstack);
 			SNR_background();
 			setResult("File", nResults - 1, path);
 			setResult("Description", nResults - 1, "Background");
 			updateResults();
 			
 			//Results
-			signoimedian = SNR_results();
+			array_results = newArray();
+			array_results = SNR_results();
 			
-			//Save Images
-			selectImage(window_zstack);
+			//Prep Images
+			selectImage(window_MaxIP);
 			run("Select None");
 			setThreshold(0, 10000);
 			run("Create Selection");
 			resetThreshold();
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
+			getMinAndMax(min, max);
 			run("Select None");
 			run("8-bit");
-			drawString(path +"\nSNR: " + signoimedian, 10, 40, 'white');
+			drawString(path +"\nSNR: " + array_results[0], 10, 40, 'white');
+			selectImage(window_Median);
+			run("Enhance Contrast", "saturated=0.01");
+			run("8-bit");
+			drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');
+			
 			//Add Slice with Cell Noise and Signal areas on it
+			run("Images to Stack", "name=Stack title=[] use");
+			setSlice(1);
 			run("Add Slice");
+			//Color in Noise
+			run("Select None");
 			roiManager("Select", newArray(1,2));
 			roiManager("AND");
 			setColor(128);
@@ -330,6 +357,7 @@ function SNR_main(dir, sub) {
 	}//end of function
 
 function SNR_background() { //Measures background, the darkest part, where there are no cells
+	selectImage(window_Median);
 	run("Select None");
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
 	run("Create Selection");
@@ -338,6 +366,7 @@ function SNR_background() { //Measures background, the darkest part, where there
 	} //End of Function
 
 function SNR_noise() { //Measures Cell Noise, ensure dots and inverse dots are in the ROI manager, positions 0 and 1 respectively
+	selectImage(window_Median);
 	run("Select None");
 	setAutoThreshold("Default dark"); //Threshold cell noise
 	run("Create Selection"); //Create selection 2
@@ -351,6 +380,7 @@ function SNR_noise() { //Measures Cell Noise, ensure dots and inverse dots are i
 	}//End of Noise function
 
 function SNR_signal() { //Measures Signal, ensure dots is in ROI manager, position 0
+	selectImage(window_MaxIP);
 	run("Select None");
 	roiManager("Select", 0);
 	run("Measure");
@@ -358,7 +388,7 @@ function SNR_signal() { //Measures Signal, ensure dots is in ROI manager, positi
 	} //End of signal function
 
 function SNR_dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
-	selectImage(window_zstack);
+	selectImage(window_MaxIP);
 	bright = getPixel(xi,yi);
 	cap = 0;
 	
@@ -396,7 +426,7 @@ function SNR_dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on m
 	}//End of dot function
 
 function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws polygon on mask image
-	selectImage(window_zstack);
+	selectImage(window_MaxIP);
 	bright = getPixel(xi,yi) - back_median; //Get Relative brightness of brightest pixel
 	cap = 0;
 	r = 0;
@@ -634,7 +664,7 @@ function SNR_maximasearch() { //Searches upwards until spot count levels out
 		
 		//Add second degree slopes to slope_second array
 		slope_second = newArray();
-		for (i = 1; i < slope.length; i++) slope_second = Array.concat(slope_second, slope[i-1] - slope[i]);
+		for (i = 1; i < slope.length; i++) slope_second = Array.concat(slope_second, abs(slope[i-1] - slope[i]));
 		if (slope_second.length >= 5) slope_second = Array.slice(slope_second, 1, 5);
 		
 		Array.getStatistics(slope_second, dummy, dummy, slope_second_avg, dummy); //Get the average of slope_second
@@ -643,27 +673,30 @@ function SNR_maximasearch() { //Searches upwards until spot count levels out
 		//Array.print(slope);
 		//print("Slope_Second");
 		//Array.print(slope_second);
-		//print("slope__second_avg\n" + slope_second_avg);
-		} while (slope_second_avg < - tolerance_maxima / 10)  //Keep going as long as the average second_slope is less than -10 (default)
-	maxima -= slope.length * 2.5; //Once the condition has been met drop maxima back half the number of steps to make it the middle of the 
+		//print("slope__second_avg: " + slope_second_avg);
+		} while (slope_second_avg > tolerance_maxima)  //Keep going as long as the average second_slope is greater than 4 (default)
+	maxima -= slope.length * 2.5; //Once the condition has been met drop maxima back half the number of steps to make it the middle of the window
 	updateResults();
 	
 	if (plot == true) { //Create plots for maxima results
-		lowest_count = getResult("Count", nResults - 1); //Define the lowest Y value
-		for (n = maxima; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
 			updateResults(); //Not Required
 			}
-		for (n = 0; n < nResults; n++) { //Add Maxima and Count values to an array
+		
+		start = nResults / 2 - 9;
+		if (start < 0) start = 0;
+		stop = nResults / 2 + 10;
+		if (stop > nResults) stop = nResults;
+		for (n = start; n < stop; n++) { //Add Maxima and Count values to an array
 			xvalues = Array.concat(xvalues, getResult("Maxima", n));
 			yvalues = Array.concat(yvalues, getResult("Count", n));
 			}
-		xvalues = Array.slice(xvalues, 1, n); //Remove first x value
-		yvalues = Array.slice(yvalues, 1, n); //Remove first y value
+		xvalues = Array.slice(xvalues, 1, xvalues.length - 1); //Remove first x value
+		yvalues = Array.slice(yvalues, 1, yvalues.length - 1); //Remove first y value
 		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues); //Make plot
-		Plot.drawLine(maxima, yvalues[n-2], maxima, yvalues[0]); //Draw vertical line at maxima
-		Plot.drawLine(maxima_start, lowest_count, maxima, lowest_count); //Draw horizontal line from y axis to maxima
+		Plot.drawLine(maxima, yvalues[yvalues.length - 1], maxima, yvalues[0]); //Draw vertical line at maxima
 		Plot.show();
 		selectWindow("Plot");
 		saveAs("PNG", outDir + "\\Plots\\" + stripath); //Save plot
@@ -704,12 +737,12 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.15 then warn user
 		if (getResult("Coefficient of Variation", nResults - m) > 0.15) setResult("Warning Code", nResults - m, 8);
 		}
-	if (getResult("Mean", nResults - 3) / getResult("StdDev", nResults - 3) > 0.2) warnings += 8;
-	if (getResult("Spots", nResults - 3) < 100) warnings += 1;
-	if (getResult("Bad Spots", nResults - 3) > 20) warnings += 4;
+	if (getResult("Mean", nResults - 3) / getResult("StdDev", nResults - 3) > warning_cvspot) warnings += 8;
+	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
+	if (getResult("Bad Spots", nResults - 3) > warning_badspot) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
-	if (warnings > 0) setResult("Warning Code", nResults - 3, warnings);
-	if ((getResult("Warning Code", nResults - 1) == 8 || getResult("Warning Code", nResults - 2) == 8) && getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3) <= 0.15) warnings += 8; //If the Noise or background has a bad cv and the signal didn't, warn in condensed file
+	if ((getResult("Warning Code", nResults - 1) == 8 || getResult("Warning Code", nResults - 2) == 8) && getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3) <= warning_cvnoise) warnings += 8; //If the Noise or background has a bad cv and the signal didn't, warn in condensed file
+	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
 	
 	//String manipulation and saving to SNR table
@@ -729,7 +762,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
-	if (warnings > 0) setResult("Warning Code", nResults - 1, warnings);
+	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
 	String.copyResults; //Copy results to clipboard
@@ -737,7 +770,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
 	
-	return signoimedian;
+	return newArray(signoimedian, sigrel, noirel);
 	}
 
 print("-- Done --");
