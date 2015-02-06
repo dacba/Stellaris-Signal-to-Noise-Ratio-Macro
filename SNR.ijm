@@ -269,15 +269,21 @@ function SNR_main(dir, sub) {
 			setColor(0);
 			spot_count = nResults;
 			bad_spots = 0;
+			x_values = newArray();
+			y_values = newArray();
+			for (q = 0; q < nResults; q++) {
+				x_values = Array.concat(x_values, getResult("X", q));
+				y_values = Array.concat(y_values, getResult("Y", q));
+				}
 			//Expand dots
 			if (poly == false) { //Run the faster dots program
 				for (q = 0; q < nResults && q < 2500; q++) {
-					SNR_dots(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
+					SNR_dots(x_values[q], y_values[q]); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			else { //Run the slower polygon program
 				for (q = 0; q < nResults && q < 2500; q++) {
-					SNR_polygon(round(getResult("X", q)), round(getResult("Y", q))); //Run dots with different x and y values
+					SNR_polygon(x_values[q], y_values[q]); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			
