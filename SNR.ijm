@@ -1,12 +1,16 @@
-macro "Calculate Signal to Noise Ratio v0.2...[c]" {
+macro "Calculate Signal to Noise Ratio v0.2.1...[c]" {
+version = "0.2.1";
 /*
-2015-2-4
-Version 0.2 - for in-house use only, do not distribute
+2015-2-6
+Version 0.2.1 - for in-house use only, do not distribute
 
 This macro opens a directory and does an in analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
 Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
 Use the Default threshold to determine cell noise and background values
+
+In regards to Significant Figures
+	All pixels are exact numbers, thus no significant figures rules apply to them or results obtained from them.
 
 Tested on ImageJ version 1.49o
 !!!1.49n does not work as intended!!!
@@ -22,8 +26,10 @@ setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
 
+
+
 if (indexOf(getVersion(), "1.49n") > -1) {
-	Dialog.create("Uncompatible ImageJ Version");
+	Dialog.create("Incompatible ImageJ Version");
 	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatible with this macro.\n \nDowngrade to 1.49m or upgrade to 1.49o by going to \"Help\" > \"Update ImageJ\" and then\nselecting \"Previous\" at the bottom of the drop down menu, or \"1.49o\" to upgrade.");
 	Dialog.addCheckbox("I want to do it anyway", false);
 	Dialog.show();
@@ -38,7 +44,7 @@ tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement
 maxima = 20;
 poly = true;
 tolerance_maxima = 4;
-sum_intensity = true;
+sum_intensity = false;
 peak_intensity = false;
 plot = false;
 count_bad = false;
@@ -46,6 +52,12 @@ count_bad = false;
 advanced = false;
 output = "Out-SNRatio";
 objective = 60;
+warning_cvspot = 0.5;
+warning_cvnoise = 0.25;
+warning_spot = 100;
+warning_badspot = 20;
+warning_disable = false;
+exclude = "NULL";
 
 //Dialog
 Dialog.create("Spot Processor");
@@ -69,13 +81,9 @@ peak_intensity = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
 
+
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
-warning_cvspot = 0.5;
-warning_cvnoise = 0.25;
-warning_spot = 100;
-warning_badspot = 20;
-warning_disable = false;
 
 if (poly == false) {
 	Dialog.create("Warning");
@@ -85,19 +93,20 @@ if (poly == false) {
 	}
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 20 || tolerance_maxima < 3 || maxima > 50) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 5 || tolerance_maxima < 2 || maxima > 50) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 3 - 10  (" + tolerance_maxima + ")");
+	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 2 - 5  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
-
-if (advanced == true) { //Advanced Options Dialog
-	waitForUser("Advanced Options\n\nSome advanced options will break the macro\nOnly change settings if you know what you're doing");
 	
-	Dialog.create("Advanced Options (Placeholder options only)");
+if (advanced == true) { //Advanced Options Dialog
+	waitForUser("Advanced Options\n\nSome advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
+	
+	Dialog.create("Advanced Options");
 	Dialog.addString("Output Folder Name:", output);
+	Dialog.addString("Exclude Files and Folders:", exclude);
 	Dialog.addChoice("Objective Magnification", newArray(60, 100));
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
 	Dialog.addCheckboxGroup(1, 2, newArray("Include Large Spots", "Disable Warning Codes"), newArray(count_bad, warning_disable));
@@ -109,6 +118,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.show();
 	
 	output = Dialog.getString();
+	exclude = Dialog.getString();
 	objective = Dialog.getChoice();
 	objective /= 60;
 	objective = 1 / objective;
@@ -119,7 +129,6 @@ if (advanced == true) { //Advanced Options Dialog
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
 	warning_badspot = Dialog.getNumber();
-	
 	}
 
 //Open Tables
@@ -129,13 +138,13 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Initialize SNR table
-if (poly == false ) print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
-else print("[SNR]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
+if (poly == false ) print("[SNR]", "Version " + version + "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
+else print("[SNR]", "Version " + version + "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
 print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Condensed Table
-if (poly == false ) print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
-else print("[Condense]", "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
+if (poly == false ) print("[Condense]", "Version " + version + "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
+else print("[Condense]", "Version " + version + "Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
 print("[Condense]", "File, Coefficient of Variation, Mean StN Ratio, Median StN Ratio, Median Signal - Background, Median Noise - Background, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Peak and Sum intensity tables if option was chosen
@@ -143,9 +152,11 @@ if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
-dir = getDirectory("Choose Directory containing .nd2 files"); //get directory
-outDir = dir + output + "\\";
-File.makeDirectory(outDir); //Create new out directory
+dir = getDirectory("Choose Directory containing .nd2 files"); //Get directory
+outDir = dir + output + "\\"; //Create base output directory
+File.makeDirectory(outDir); //Create base output directory
+outDir = outDir + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima + "\\";//Create specific output directory
+File.makeDirectory(outDir); //Create specific output directory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
 
 //RUN IT!
@@ -196,11 +207,11 @@ function SNR_main(dir, sub) {
 	n = 0;
 	for (i=0;i<list.length; i++){ //for each file
 		path = sub + list[i];
-		if (endsWith(list[i], "/") && indexOf(path, output) == -1) {
-			File.makeDirectory(outDir + path); //Recreate file system in output folder
+		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) {
+			//File.makeDirectory(outDir + path); //Recreate file system in output folder
 			SNR_main(dir, path); //Recursive Step
 			}
-		else if (endsWith(list[i], ".nd2")) {
+		else if (endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1) {
 			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
 			stripath = replace(substring(path, 0, indexOf(path, ".nd2")), "/", "_");
 			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
@@ -333,7 +344,7 @@ function SNR_main(dir, sub) {
 			run("8-bit");
 			drawString(path +"\nSNR: " + array_results[0], 10, 40, 'white');
 			selectImage(window_Median);
-			run("Enhance Contrast", "saturated=0.01");
+			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
 			run("8-bit");
 			drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			
@@ -353,7 +364,7 @@ function SNR_main(dir, sub) {
 			fill();
 			drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + bad_spots, 10, 40, 'white');
 			run("Select None");
-			saveAs("tif", outDir + sub + strip + "_Merge.tif");
+			saveAs("tif", outDir + stripath + "_Merge.tif");
 			
 			run("Close All");
 			roiManager("Deselect");
@@ -448,11 +459,11 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		pixel = Array.concat(pixel, getPixel(xi, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
-		for (p = 0; p < pixel_dif.length; p++) {
+		for (p = 0; p < pixel_dif.length; p++) { //Calculate the pixel_dif
 			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
 			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
 			}
-		if (pixel_dif.length >= 1) {
+		if (pixel_dif.length >= 1) { //Get average of pixel_dif
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		//print(pixel.length, pixel_avg);
@@ -488,6 +499,7 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 	northeast = r; 
 	if (r >= 5) cap ++;
 	
+	//East point
 	for (r = 0; (getPixel(xi + r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
@@ -508,9 +520,10 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		if (pixel.length < 3) r-=pixel.length;
 		else r-=2;
 		}
-	east = xi + r; //East point
+	east = xi + r; 
 	if (r >= 5) cap ++;
 	
+	//Southeast point
 	for (r = 0; (getPixel(xi + r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
@@ -531,9 +544,10 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		if (pixel.length < 3) r-=pixel.length;
 		else r-=2;
 		}
-	southeast = r; //Southeast point
+	southeast = r;
 	if (r >= 5) cap ++;
 	
+	//South Point
 	for (r = 0; (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
@@ -554,9 +568,10 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		if (pixel.length < 3) r-=pixel.length;
 		else r-=2;
 		}
-	south = yi - r; //South Point
+	south = yi - r; 
 	if (r >= 5) cap ++;
 	
+	//Southwest point
 	for (r = 0; (getPixel(xi - r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
@@ -577,9 +592,10 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		if (pixel.length < 3) r-=pixel.length;
 		else r-=2;
 		}
-	southwest = r; //Southwest point
+	southwest = r; 
 	if (r >= 5) cap ++;
 	
+	//West point
 	for (r = 0; (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
@@ -600,9 +616,10 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		if (pixel.length < 3) r-=pixel.length;
 		else r-=2;
 		}
-	west = xi - r; //West point
+	west = xi - r;
 	if (r >= 5) cap ++;
 	
+	//Northwest point
 	for (r = 0; (getPixel(xi - r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
@@ -623,9 +640,10 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		if (pixel.length < 3) r-=pixel.length;
 		else r-=2;
 		}
-	northwest = r; //Northwest point
+	northwest = r;
 	if (r >= 5) cap ++;
-	  
+	
+	
 	if (cap <= 3 || count_bad == true) {
 		selectImage(window_signal);
 		makePolygon(xi, north, xi + northeast, yi + northeast, east, yi, xi + southeast, yi - southeast, 	xi, south, xi - southwest, yi - southwest, west, yi, xi - northwest, yi + northwest);
@@ -638,7 +656,7 @@ function SNR_polygon(xi, yi) { //Searches in eight cardinal directions and draws
 		}
 	}//End of crazy polygon function
 	
-function SNR_maximasearch() { //Searches upwards until spot count levels out
+function SNR_maximasearch() { //Searches until the slope of the spot count levels out
 	maxima = maxima_start;
 	slope = newArray();
 	slope_second = newArray();
@@ -714,10 +732,10 @@ function SNR_maximasearch() { //Searches upwards until spot count levels out
 
 function SNR_results() { //String Manipulation and Saves results to tables
 	//Calculate signal to noise ratio and other values
-	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1));
-	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1));
-	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1);
-	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1);
+	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
+	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
+	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
+	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	
 	//Set results
@@ -740,14 +758,17 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
 	*/
 	warnings = 0;
-	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.15 then warn user
-		if (getResult("Coefficient of Variation", nResults - m) > 0.15) setResult("Warning Code", nResults - m, 8);
+	temp = 0;
+	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
+		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
+			setResult("Warning Code", nResults - m, "High CV");
+			temp = 1;
+			}
 		}
-	if (getResult("Mean", nResults - 3) / getResult("StdDev", nResults - 3) > warning_cvspot) warnings += 8;
+	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv for
 	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
 	if (getResult("Bad Spots", nResults - 3) > warning_badspot) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
-	if ((getResult("Warning Code", nResults - 1) == 8 || getResult("Warning Code", nResults - 2) == 8) && getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3) <= warning_cvnoise) warnings += 8; //If the Noise or background has a bad cv and the signal didn't, warn in condensed file
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
 	
