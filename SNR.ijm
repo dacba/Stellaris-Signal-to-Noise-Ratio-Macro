@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.3.1...[c]" {
-version = "0.3.1";
+macro "Calculate Signal to Noise Ratio v0.3.2...[c]" {
+version = "0.3.2";
 /*
 2015-2-13
-Version 0.3.1 - for in-house use only, do not distribute
+Version 0.3.2 - for in-house use only, do not distribute
 
 This macro opens a directory and does an in analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -48,6 +48,7 @@ sum_intensity = false;
 peak_intensity = false;
 plot = false;
 spotbyspot = false;
+user_area = false;
 //Advanced Options
 advanced = false;
 output = "Out-SNRatio";
@@ -70,7 +71,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addCheckboxGroup(2, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Splitting(Experimental)", "Advanced Options"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced));
+Dialog.addCheckboxGroup(3, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Splitting(Experimental)", "Advanced Options", "User Defined Area"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
 Dialog.show();
 
 //Retrieve Choices
@@ -84,6 +85,7 @@ peak_intensity = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
 spotbyspot = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
+user_area = Dialog.getCheckbox();
 
 
 maxima_start = maxima;
@@ -241,6 +243,22 @@ function SNR_main(dir, sub) {
 			selectImage(window_raw);
 			run("Close");
 			
+			if (user_area == true) {
+				selectImage(window_MaxIP);
+				setBatchMode('show');
+				run("Enhance Contrast", "saturated=0.01");
+				setTool("freehand");
+				waitForUser("Press Okay after selecting area for analysis\nSelect nothing to analyze the entire image");
+				setBatchMode('hide');
+				if (selectionType() >= 0 && selectionType() < 4) {
+					roiManager("Add");
+					}
+				else {
+					run("Select All");
+					roiManager("Add");
+					}
+				}
+			
 			//Get Median Background Level
 			SNR_background();
 			back_median = getResult("Median", nResults - 1);
@@ -253,6 +271,7 @@ function SNR_main(dir, sub) {
 			
 			//Run peak intensity and Sum intensity measurments
 			if (peak_intensity == true) {
+				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
 				run("Measure");
 				String.resetBuffer;
@@ -262,6 +281,7 @@ function SNR_main(dir, sub) {
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
 			if (sum_intensity == true) {
+				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				setResult("Sum Intensity", 0, 0);
 				for (q = 0; q < nResults; q++) {
@@ -277,6 +297,7 @@ function SNR_main(dir, sub) {
 				}
 			if (peak_intensity == false && sum_intensity == false) {
 				run("Clear Results");
+				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
 			
@@ -328,6 +349,18 @@ function SNR_main(dir, sub) {
 					}//End of dots loop
 				}
 			
+			x_values_high = newArray();
+			y_values_high = newArray();
+			north_high = newArray();
+			northeast_high = newArray();
+			east_high = newArray();
+			southeast_high = newArray();
+			south_high = newArray();
+			southwest_high = newArray();
+			west_high = newArray();
+			northwest_high = newArray();
+			mean_intensity_high = newArray();
+			
 			if (spotbyspot == true) {
 				selectImage(window_signal);
 				close();
@@ -378,18 +411,6 @@ function SNR_main(dir, sub) {
 				
 				//print(low_cutoff, high_cutoff);
 				//print(temparr[0], temparr[temparr.length-1]);
-				
-				x_values_high = newArray();
-				y_values_high = newArray();
-				north_high = newArray();
-				northeast_high = newArray();
-				east_high = newArray();
-				southeast_high = newArray();
-				south_high = newArray();
-				southwest_high = newArray();
-				west_high = newArray();
-				northwest_high = newArray();
-				mean_intensity_high = newArray();
 				
 				//Mask lowest
 				for (q = 0; q < mean_intensity.length; q++) { //Select spots that should not be included in the regular measurement
@@ -473,14 +494,14 @@ function SNR_main(dir, sub) {
 				
 				
 				//Regular Signal
-				SNR_signal(0); //give regular signal
+				SNR_signal(1); //give regular signal
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Regular Signal");
 				updateResults();
 				
 				//High Signal
 				if (x_values_high.length > 0) {
-					SNR_signal(2); //give high signal
+					SNR_signal(3); //give high signal
 					setResult("File", nResults - 1, path);
 					setResult("Description", nResults - 1, "High Signal");
 					updateResults();
@@ -488,7 +509,7 @@ function SNR_main(dir, sub) {
 				
 				//Run Noise
 				if (x_values_high.length > 0) SNR_noise(1, 3); //Give inverse of regular and high signal
-				else SNR_noise(1, 1);
+				else SNR_noise(2, 2);
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Cell Noise");
 				updateResults();
@@ -513,13 +534,13 @@ function SNR_main(dir, sub) {
 				close();
 				
 				//Run signal
-				SNR_signal(0);
+				SNR_signal(1);
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Signal");
 				updateResults();
 				
 				//Run Noise
-				SNR_noise(1, 1); 
+				SNR_noise(2, 2);
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Cell Noise");
 				updateResults();
@@ -534,7 +555,7 @@ function SNR_main(dir, sub) {
 			//Results
 			array_results = newArray();
 			if (spotbyspot == true && x_values_high.length > 0) array_results = SNR_bright_results();
-			else if (spotbyspot == true && x_values_high.length <= 4) array_results = SNR_bright_results_null();
+			else if (spotbyspot == true && x_values_high.length == 4) array_results = SNR_bright_results_null();
 			else array_results = SNR_results();
 			
 			//Prep Images
@@ -556,21 +577,22 @@ function SNR_main(dir, sub) {
 			
 			//Add Slice with Cell Noise and Signal areas on it
 			run("Images to Stack", "name=Stack title=[] use");
+			run("Reverse");
 			setSlice(1);
 			run("Add Slice");
 			//Color in Noise
 			run("Select None");
 			if (spotbyspot == true && x_values_high.length > 0) {
-				roiManager("Select", newArray(1,3,4)); //Noise, inverse of regular signal and bright signal
+				roiManager("Select", newArray(0,2,4,5)); //Noise, inverse of regular signal and bright signal
 				roiManager("AND");
 				setColor(85);
 				fill();
 				run("Select None");
-				roiManager("Select", 0); //Regular Signal
+				roiManager("Select", 1); //Regular Signal
 				setColor(170);
 				fill();
 				run("Select None");
-				roiManager("Select", 2); //Bright Signal
+				roiManager("Select", 3); //Bright Signal
 				setColor(255);
 				fill();
 				run("Enlarge...", "enlarge=1 pixel");
@@ -579,16 +601,22 @@ function SNR_main(dir, sub) {
 				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + bad_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
 			else {
-				roiManager("Select", newArray(1,2));
+				roiManager("Select", newArray(0,2,3));
 				roiManager("AND");
 				setColor(128);
 				fill();
 				run("Select None");
-				roiManager("Select", 0);
+				roiManager("Select", 1);
 				setColor(255);
 				fill();
 				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + bad_spots, 10, 40, 'white');
 				}
+			if (user_area == true) {
+				roiManager("Select", 0);
+				setForegroundColor(255, 255, 255);
+				run("Draw", "slice");
+				}
+			
 			run("Select None");
 			saveAs("tif	", outDir + stripath + "_Merge.tif");
 			run("Close All");
@@ -616,7 +644,7 @@ function SNR_noise(roi1, roi2) { //Measures Cell Noise, ensure dots and inverse 
 	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
 	run("Enlarge...", "enlarge=11 pixel"); //Expand Cell noise boundary; Needed for exceptional images
 	roiManager("Add");
-	roiManager("Select", newArray(roi1, roi2, roiManager("Count") - 1)); //Select Inverse dots and Cell Noise
+	roiManager("Select", newArray(0, roi1, roi2, roiManager("Count") - 1)); //Select Inverse dots and Cell Noise
 	roiManager("AND"); //Select regions of Cell Noise and inverse of dots
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
@@ -624,8 +652,8 @@ function SNR_noise(roi1, roi2) { //Measures Cell Noise, ensure dots and inverse 
 
 function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, position 0
 	selectImage(window_MaxIP);
-	run("Select None");
-	roiManager("Select", roi);
+	roiManager("Select", newArray(0, roi));
+	roiManager("AND");
 	run("Measure");
 	run("Select None");
 	} //End of signal function
@@ -893,20 +921,22 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	slope_second_avg = 1;
 	run("Clear Results");
 	//Initialize Maxima Results
+	roiManager("Select", 0);
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
 	maxima += 5;
 	
 	//Second run
+	roiManager("Select", 0);
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
 	maxima += 5;
-	
 	//Get first slope value
 	slope = (getResult("Count", nResults - 1) - getResult("Count", nResults - 2));
 	updateResults();
 	do { //Loop until the slope of the count levels out
 		//Get the next Spot Count
+		roiManager("Select", 0);
 		run("Find Maxima...", "noise=" + maxima + " output=Count");
 		setResult("Maxima", nResults - 1, maxima);
 		updateResults();
@@ -934,6 +964,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	
 	if (plot == true) { //Create plots for maxima results
 		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
 			updateResults(); //Not Required
