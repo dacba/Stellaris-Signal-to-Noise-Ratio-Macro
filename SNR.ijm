@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.3...[c]" {
-version = "0.3";
+macro "Calculate Signal to Noise Ratio v0.3.1...[c]" {
+version = "0.3.1";
 /*
-2015-2-12
-Version 0.3 - for in-house use only, do not distribute
+2015-2-13
+Version 0.3.1 - for in-house use only, do not distribute
 
 This macro opens a directory and does an in analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -47,20 +47,20 @@ tolerance_maxima = 4;
 sum_intensity = false;
 peak_intensity = false;
 plot = false;
-count_bad = false;
+spotbyspot = false;
 //Advanced Options
 advanced = false;
 output = "Out-SNRatio";
 objective = 60;
-spotbyspot = false;
+count_bad = false;
 warning_cvspot = 0.5;
 warning_cvnoise = 0.25;
 warning_spot = 100;
 warning_badspot = 20;
 warning_disable = false;
 exclude = "NULL";
-IQR_low = 0.5;
-IQR_high = 3.8;
+low_user = 3;
+high_user = 4;
 
 //Dialog
 Dialog.create("Spot Processor");
@@ -113,9 +113,9 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addString("Exclude Files and Folders:", exclude);
 	Dialog.addChoice("Objective Magnification", newArray(60, 100));
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
-	Dialog.addSlider("IQR Bottom", 0, 1, IQR_low);
-	Dialog.addSlider("IQR Top", 3, 4, IQR_high);
-	Dialog.addCheckboxGroup(1, 2, newArray("Include Large Spots", "Disable Warning Codes"), newArray(count_bad, warning_disable));
+	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
+	Dialog.addSlider("MADe Top", 1, 5, high_user);
+	Dialog.addCheckboxGroup(2, 2, newArray("Include Large Spots", "Disable Warning Codes"), newArray(count_bad, warning_disable));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -129,8 +129,8 @@ if (advanced == true) { //Advanced Options Dialog
 	objective /= 60;
 	objective = 1 / objective;
 	tolerance_drop = Dialog.getNumber();
-	IQR_low = Dialog.getNumber();
-	IQR_high = Dialog.getNumber();
+	low_user = Dialog.getNumber();
+	high_user = Dialog.getNumber();
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
@@ -153,7 +153,7 @@ print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Coeffic
 //Initialize Condensed Table
 if (poly == false ) print("[Condense]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
 else print("[Condense]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-if (spotbyspot == true) print("[Condense]", "File, Mean SNR, Bright Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Warning Code");
+if (spotbyspot == true) print("[Condense]", "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Warning Code");
 else print("[Condense]", "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Warning Code");
 
 //Initialize Peak and Sum intensity tables if option was chosen
@@ -308,12 +308,12 @@ function SNR_main(dir, sub) {
 				}
 			//Expand dots
 			if (poly == false) { //Run the faster dots program
-				for (q = 0; q < nResults && q < 5000; q++) {
+				for (q = 0; q < nResults; q++) {
 					SNR_dots(x_values[q], y_values[q]); //Run dots with different x and y values
 					}//End of dots loop
 				}
 			else { //Run the slower polygon program
-				for (q = 0; q < x_values.length && q < 5000; q++) {
+				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (spotbyspot == true) {
 						north = Array.concat(north, cardinal[0]);
@@ -334,23 +334,49 @@ function SNR_main(dir, sub) {
 				mean_intensity = newArray();
 				
 				//Iterate through every spot and get mean
-				for (q = 0; q < x_values.length && q < 5000; q++) {
+				for (q = 0; q < x_values.length; q++) {
 					selectImage(window_MaxIP);
 					makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
 					run("Measure");
 					mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
+					//print(getResult("Mean", nResults-1));
 					run("Clear Results");
 					}
 				
-				//Calculate quartile size and cutoffs
-				quartile = round(mean_intensity.length/4);
-				temparr = newArray();
-				temparr = Array.copy(mean_intensity);
+				//Calculate cutoffs
+				temparr = newArray(); //temporary array
+				temparr = Array.copy(mean_intensity); //temp array stores mean_intensity values
 				Array.sort(temparr);
-				IQR_low_cutoff = temparr[quartile * IQR_low];
-				IQR_high_cutoff = temparr[quartile * IQR_high];
-				bad_IQR = newArray();
-				//print(IQR_low_cutoff, IQR_high_cutoff);
+				med = 0; //median of mean_intensity
+				madarr = newArray(); //median absolute deviation array
+				mad = 0;
+				if (temparr%2 == 0) { //If even
+					temp = temparr.length/2;
+					med =(temparr[temp] + temparr[temp+1])/2;
+					}
+				else { //Odd
+					med = temparr[floor(temparr.length/2)+1];
+					}
+				//Median Absolute Deviation
+				for (q = 0; q < mean_intensity.length; q++) {
+					madarr = Array.concat(madarr, abs(med - mean_intensity[q]));
+					}
+				Array.sort(madarr);
+				if (madarr%2 == 0) { //If even
+					temp = madarr.length/2;
+					mad =(madarr[temp] + madarr[temp+1])/2;
+					}
+				else mad = madarr[floor(madarr.length/2)+1]; //If odd
+				
+				made = mad * 1.483;
+				
+				low_cutoff = med - (made * low_user);
+				high_cutoff = med + (made * high_user);
+				
+				low_counter = newArray();
+				high_counter = newArray();
+				
+				//print(low_cutoff, high_cutoff);
 				//print(temparr[0], temparr[temparr.length-1]);
 				
 				x_values_high = newArray();
@@ -365,15 +391,15 @@ function SNR_main(dir, sub) {
 				northwest_high = newArray();
 				mean_intensity_high = newArray();
 				
-				//Mask lowest (0.5)IQR
+				//Mask lowest
 				for (q = 0; q < mean_intensity.length; q++) { //Select spots that should not be included in the regular measurement
-					if (mean_intensity[q] < IQR_low_cutoff) {
-						//print("Low " + mean_intensity[q] + " / " + IQR_low_cutoff);
-						bad_IQR = Array.concat(bad_IQR, q); //Mask for low IQR cutoff
+					if (mean_intensity[q] < low_cutoff) {
+						//print("Low " + mean_intensity[q] + " / " + low_cutoff);
+						low_counter = Array.concat(low_counter, q); //Mask for low cutoff
 						}
-					else if (mean_intensity[q] > IQR_high_cutoff) {
-						//print("High " + mean_intensity[q] + " / " + IQR_high_cutoff);
-						bad_IQR = Array.concat(bad_IQR, q); //Add to array that will exclude points
+					else if (mean_intensity[q] > high_cutoff) {
+						//print("High " + mean_intensity[q] + " / " + high_cutoff);
+						high_counter = Array.concat(low_counter, q); //Add to array that will exclude points
 						x_values_high = Array.concat(x_values_high, x_values[q]);
 						y_values_high = Array.concat(y_values_high, y_values[q]);
 						/*north_high = Array.concat(north_high, north[q]);
@@ -393,29 +419,31 @@ function SNR_main(dir, sub) {
 				selectWindow("Regular Signal");
 				window_reg_signal = getImageID();
 				
+
 				newImage("High Signal", "8-bit white", width, height, 1); 
 				selectWindow("High Signal");
 				window_high_signal = getImageID();
 				
-				
-				//Re-run Poly with regular values
+				//Re-run Poly
 				setColor(0);
-				for (q = 0; q < x_values.length && q < 5000; q++) {
+				temp = count_bad;
+				count_bad = true;
+				for (q = 0; q < x_values_high.length; q++) {
+					//print(x_values_high[q], y_values_high[q]);
+					cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
+					}
+				count_bad = temp;
+				
+				for (q = 0; q < x_values.length; q++) {
 					found = false;
-					for (p = 0; p < bad_IQR.length; p++) {
-						if (q == bad_IQR[p]) found = true;
+					for (p = 0; p < low_counter.length; p++) {
+						if (q == low_counter[p]) found = true;
 						}
 					if (found == false) cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with new x and y values, screen out low and high signal
 					}
 				
-				//Re-run Poly with high values
-				for (q = 0; q < x_values_high.length && q < 5000; q++) {
-					//print(x_values_high[q], y_values_high[q]);
-					cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
-					}
-				
-				print(x_values.length-bad_IQR.length + " Regular points processed");
-				print(x_values_high.length + " bright spots");
+				print(x_values.length-low_counter.length + " Regular points processed");
+				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
 				if (bad_spots > 0) print(bad_spots + " bad points detected");
 				
 				selectImage(window_reg_signal);
@@ -426,14 +454,15 @@ function SNR_main(dir, sub) {
 				selectImage(window_reg_signal);
 				close();
 				
-				selectImage(window_high_signal);
-				run("Create Selection");
-				roiManager("Add");
-				run("Make Inverse");
-				roiManager("Add");
-				selectImage(window_high_signal);
-				close();
-				
+				if (x_values_high.length > 0) {
+					selectImage(window_high_signal);
+					run("Create Selection");
+					roiManager("Add");
+					run("Make Inverse");
+					roiManager("Add");
+					selectImage(window_high_signal);
+					close();
+					}
 				
 				//DEBUG
 				//selectImage(window_MaxIP);
@@ -450,13 +479,16 @@ function SNR_main(dir, sub) {
 				updateResults();
 				
 				//High Signal
-				SNR_signal(2); //give high signal
-				setResult("File", nResults - 1, path);
-				setResult("Description", nResults - 1, "High Signal");
-				updateResults();
+				if (x_values_high.length > 0) {
+					SNR_signal(2); //give high signal
+					setResult("File", nResults - 1, path);
+					setResult("Description", nResults - 1, "High Signal");
+					updateResults();
+					}
 				
 				//Run Noise
-				SNR_noise(1, 3); //Give inverse of regular and high signal
+				if (x_values_high.length > 0) SNR_noise(1, 3); //Give inverse of regular and high signal
+				else SNR_noise(1, 1);
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Cell Noise");
 				updateResults();
@@ -501,7 +533,8 @@ function SNR_main(dir, sub) {
 				
 			//Results
 			array_results = newArray();
-			if (spotbyspot == true) array_results = SNR_bright_results();
+			if (spotbyspot == true && x_values_high.length > 0) array_results = SNR_bright_results();
+			else if (spotbyspot == true && x_values_high.length <= 4) array_results = SNR_bright_results_null();
 			else array_results = SNR_results();
 			
 			//Prep Images
@@ -513,12 +546,12 @@ function SNR_main(dir, sub) {
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
 			run("8-bit");
-			if (spotbyspot == true) drawString(path + "\nRegular SNR: " + array_results[0] + "\nBright SNR: " + array_results[3], 10, 40, 'white');
+			if (spotbyspot == true && x_values_high.length > 0) drawString(path + "\nRegular SNR: " + array_results[0] + "\nBright SNR: " + array_results[3], 10, 40, 'white');
 			else drawString(path + "\nSNR: " + array_results[0], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
 			run("8-bit");
-			if (spotbyspot == true) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
+			if (spotbyspot == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
 			
 			//Add Slice with Cell Noise and Signal areas on it
@@ -527,7 +560,7 @@ function SNR_main(dir, sub) {
 			run("Add Slice");
 			//Color in Noise
 			run("Select None");
-			if (spotbyspot == true) {
+			if (spotbyspot == true && x_values_high.length > 0) {
 				roiManager("Select", newArray(1,3,4)); //Noise, inverse of regular signal and bright signal
 				roiManager("AND");
 				setColor(85);
@@ -1006,18 +1039,16 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
 	
 	//BRIGHT SPOTS
-	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	signoimedian_bright = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
-	cv_bright = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	
 	//Set results
-	for (m = 1; m <= 4; m++) { //Calculate CV for each selection
-		setResult("Coefficient of Variation", nResults - m, getResult("StdDev", nResults - m) / getResult("Mean", nResults - m));
-		}
+
+	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
+	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
+	setResult("Coefficient of Variation", nResults - 4, getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4)); //Regular Signal CV
 	setResult("Mean SNR", nResults - 4, signoimean);
-	setResult("Mean SNR", nResults - 3, signoimean_bright);
 	setResult("Median SNR", nResults - 4, signoimedian);
 	setResult("Median SNR", nResults - 3, signoimedian_bright);
 	setResult("Signal", nResults - 4, sigrel);
@@ -1059,7 +1090,6 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	//Save Condensed Results
 	setResult("File", nResults, path);
 	setResult("Mean SNR", nResults - 1, signoimean);
-	setResult("Bright Mean SNR", nResults - 1, signoimean_bright);
 	setResult("Median SNR", nResults - 1, signoimedian);
 	setResult("Bright Median SNR", nResults - 1, signoimedian_bright);
 	setResult("Signal", nResults - 1, sigrel);
@@ -1078,7 +1108,85 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	
 	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright);
 	}
+
+function SNR_bright_results_null() { //String Manipulation and Saves results to tables
+	//REGULAR SPOTS
+	//Calculate signal to noise ratio and other values
+	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
+	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
+	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
+	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	
+	//BRIGHT SPOTS
+	signoimedian_bright = 0;
+	sigrel_bright = 0;
+	noirel_bright = 0;
+	
+	//Set results
+
+	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
+	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
+	setResult("Coefficient of Variation", nResults - 3, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Regular Signal CV
+	setResult("Mean SNR", nResults - 3, signoimean);
+	setResult("Median SNR", nResults - 3, signoimedian);
+	setResult("Signal", nResults - 3, sigrel);
+	setResult("Noise", nResults - 3, noirel);
+	setResult("Spots", nResults - 3, spot_count);
+	setResult("Bad Spots", nResults - 3, bad_spots);
+	setResult("Maxima", nResults - 3, maxima);
+	
+	//Set Warnings
+	/*Warning Codes
+	1 = Low spot count (Suspicious)
+	2 = Maxima is too high
+	4 = Largely Bound Spots
+	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	*/
+	warnings = 0;
+	temp = 0;
+	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
+		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
+			setResult("Warning Code", nResults - m, "High CV");
+			temp = 1;
+			}
+		}
+	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv
+	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
+	if (getResult("Bad Spots", nResults - 3) > warning_badspot) warnings += 4;
+	if (maxima_start == maxima) warnings += 2;
+	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
+	updateResults();
+	
+	//String manipulation and saving to SNR table
+	String.resetBuffer;
+	String.copyResults; //Copy results to clipboard
+	String.append(String.paste); //Append results to buffer from clipboard 
+	print("[SNR]", replace(String.buffer, "	", ", ")); //Print results to new table
+	run("Clear Results");
+	
+	//Save Condensed Results
+	setResult("File", nResults, path);
+	setResult("Mean SNR", nResults - 1, signoimean);
+	setResult("Median SNR", nResults - 1, signoimedian);
+	setResult("Bright Median SNR", nResults - 1, signoimedian_bright);
+	setResult("Signal", nResults - 1, sigrel);
+	setResult("Bright Signal", nResults - 1, sigrel_bright);
+	setResult("Noise", nResults - 1, noirel);
+	setResult("Spots", nResults - 1, spot_count);
+	setResult("Bad Spots", nResults - 1, bad_spots);
+	setResult("Maxima", nResults - 1, maxima);
+	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
+	updateResults();
+	String.resetBuffer;
+	String.copyResults; //Copy results to clipboard
+	String.append(String.paste); //Append results to buffer from clipboard 
+	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
+	run("Clear Results");
+	
+	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright);
+	}
+
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
