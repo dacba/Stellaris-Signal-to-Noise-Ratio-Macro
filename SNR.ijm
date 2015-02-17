@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.3.2...[c]" {
-version = "0.3.2";
+macro "Calculate Signal to Noise Ratio v0.3.3...[c]" {
+version = "0.3.3";
 /*
-2015-2-13
-Version 0.3.2 - for in-house use only, do not distribute
+2015-2-17
+Version 0.3.3 - for in-house use only, do not distribute
 
 This macro opens a directory and does an in analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -49,11 +49,12 @@ peak_intensity = false;
 plot = false;
 spotbyspot = false;
 user_area = false;
+user_area_rev = false;
 //Advanced Options
 advanced = false;
 output = "Out-SNRatio";
 objective = 60;
-count_bad = false;
+count_bad = true;
 warning_cvspot = 0.5;
 warning_cvnoise = 0.25;
 warning_spot = 100;
@@ -71,7 +72,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addCheckboxGroup(3, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Splitting(Experimental)", "Advanced Options", "User Defined Area"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
+Dialog.addCheckboxGroup(3, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Filtering(Experimental)", "Advanced Options", "User Defined Area"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
 Dialog.show();
 
 //Retrieve Choices
@@ -86,8 +87,6 @@ plot = Dialog.getCheckbox();
 spotbyspot = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
 user_area = Dialog.getCheckbox();
-
-
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
@@ -106,9 +105,9 @@ if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
-	
+
 if (advanced == true) { //Advanced Options Dialog
-	waitForUser("Advanced Options\n\nSome advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
+	waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
 	
 	Dialog.create("Advanced Options");
 	Dialog.addString("Output Folder Name:", output);
@@ -245,17 +244,31 @@ function SNR_main(dir, sub) {
 			
 			if (user_area == true) {
 				selectImage(window_MaxIP);
-				setBatchMode('show');
 				run("Enhance Contrast", "saturated=0.01");
-				setTool("freehand");
-				waitForUser("Press Okay after selecting area for analysis\nSelect nothing to analyze the entire image");
-				setBatchMode('hide');
-				if (selectionType() >= 0 && selectionType() < 4) {
-					roiManager("Add");
-					}
-				else {
+				setBatchMode('show');
+				Dialog.create("User Defined Area Option");
+				Dialog.addRadioButtonGroup("Would you like to Exclude your selection from the analysis or only analyze your selection?", newArray("Exclude my selection", "Only analyze my selection", "Analyze the whole image"), 2, 2, "Exclude my selection");
+				Dialog.show();
+				user_area_rev = Dialog.getRadioButton();
+				if (matches(user_area_rev, "Exclude my selection")) user_area_rev = true;
+				if (matches(user_area_rev, "Only analyze my selection")) user_area_rev = false;
+				if (matches(user_area_rev, "Analyze the whole image")) {
 					run("Select All");
 					roiManager("Add");
+					setBatchMode('hide');
+					}
+				else { //
+					setTool("freehand");
+					waitForUser("Press \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
+					setBatchMode('hide');
+					if (selectionType() >= 0 && selectionType() < 4) {
+						if (user_area_rev == true) run("Make Inverse");
+						roiManager("Add");
+						}
+					else {
+						run("Select All");
+						roiManager("Add");
+						}
 					}
 				}
 			
@@ -367,8 +380,9 @@ function SNR_main(dir, sub) {
 				mean_intensity = newArray();
 				
 				//Iterate through every spot and get mean
+				selectImage(window_MaxIP);
 				for (q = 0; q < x_values.length; q++) {
-					selectImage(window_MaxIP);
+					run("Select None");
 					makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
 					run("Measure");
 					mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
@@ -481,6 +495,10 @@ function SNR_main(dir, sub) {
 					roiManager("Add");
 					run("Make Inverse");
 					roiManager("Add");
+					selectImage(window_high_signal);
+					close();
+					}
+				else {
 					selectImage(window_high_signal);
 					close();
 					}
@@ -612,9 +630,27 @@ function SNR_main(dir, sub) {
 				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + bad_spots, 10, 40, 'white');
 				}
 			if (user_area == true) {
-				roiManager("Select", 0);
 				setForegroundColor(255, 255, 255);
-				run("Draw", "slice");
+				if (user_area_rev == false) {
+					/*getSelectionBounds(x, y, width, height);
+					x = x+width/2;
+					y = y+height/2;
+					setJustification("center");
+					setFont("SansSerif", 12);*/
+					for (k = 1; k < nSlices; k++) {
+						setSlice(k);
+						roiManager("Select", 0);
+						run("Draw", "slice");
+						//drawString("Excluded", x, y, 'white');
+						}
+					}
+				else {
+					for (k = 1; k < nSlices; k++) {
+						setSlice(k);
+						roiManager("Select", 0);
+						run("Draw", "slice");
+						}
+					}
 				}
 			
 			run("Select None");
