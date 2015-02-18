@@ -271,7 +271,11 @@ function SNR_main(dir, sub) {
 						}
 					}
 				}
-			
+			else {
+				run("Select All");
+				roiManager("Add");
+				}
+				
 			//Get Median Background Level
 			SNR_background();
 			back_median = getResult("Median", nResults - 1);
@@ -594,8 +598,8 @@ function SNR_main(dir, sub) {
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
 			
 			//Add Slice with Cell Noise and Signal areas on it
+			selectImage(window_MaxIP);
 			run("Images to Stack", "name=Stack title=[] use");
-			run("Reverse");
 			setSlice(1);
 			run("Add Slice");
 			//Color in Noise
@@ -948,7 +952,6 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 		return cardinal;
 		}
 	}//End of crazy polygon function
-
 
 function SNR_maximasearch() { //Searches until the slope of the spot count levels out
 	maxima = maxima_start;
