@@ -195,7 +195,7 @@ if (indexOf(getVersion(), "1.49n") > -1) { //Save as Text if running 1.49n
 		run("Close");
 		}
 	}
-else { //Save as Measurement csv file if running 1.49m
+else { //Save as Measurement csv file if running other
 	selectWindow("SNR");
 	saveAs("Measurements", outDir + "Results_Raw.csv");
 	run("Close");
@@ -674,6 +674,7 @@ function SNR_main(dir, sub) {
 function SNR_background() { //Measures background, the darkest part, where there are no cells
 	selectImage(window_Median);
 	run("Select None");
+	roiManager("Select", 0);
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
 	run("Create Selection");
 	run("Measure");
@@ -683,6 +684,7 @@ function SNR_background() { //Measures background, the darkest part, where there
 function SNR_noise(roi1, roi2) { //Measures Cell Noise, ensure dots and inverse dots are in the ROI manager, positions 0 and 1 respectively
 	selectImage(window_Median);
 	run("Select None");
+	roiManager("Select", 0);
 	setAutoThreshold("Default dark"); //Threshold cell noise
 	run("Create Selection"); //Create selection 2
 	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
