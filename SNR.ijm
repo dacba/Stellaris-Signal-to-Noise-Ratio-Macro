@@ -4,13 +4,13 @@ version = "0.3.3";
 2015-2-17
 Version 0.3.3 - for in-house use only, do not distribute
 
-This macro opens a directory and does an in analysis of spots
+This macro opens a directory and does an analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
 Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
 Use the Default threshold to determine cell noise and background values
 
 In regards to Significant Figures
-	All pixels are exact numbers, thus no significant figures rules apply to them or results obtained from them.
+	All pixels are treated as exact numbers, thus no significant figures rules apply to them or results obtained from them.
 
 Tested on ImageJ version 1.49o
 !!!1.49n does not work as intended!!!
@@ -162,10 +162,14 @@ if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
+output_name = "Results " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
+if (spotbyspot == true) output_name += "-filtered-" + low_user + "-" + high_user;
+if (user_area == true) output_name += "-selection-" + toHex(round(random*random*random*100000000));
+
 dir = getDirectory("Choose Directory containing .nd2 files"); //Get directory
 outDir = dir + output + "\\"; //Create base output directory
 File.makeDirectory(outDir); //Create base output directory
-outDir = outDir + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima + "\\";//Create specific output directory
+outDir = outDir + output_name + "\\";//Create specific output directory
 File.makeDirectory(outDir); //Create specific output directory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
 
