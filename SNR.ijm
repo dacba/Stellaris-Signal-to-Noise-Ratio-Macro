@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.3.3...[c]" {
-version = "0.3.3";
+macro "Calculate Signal to Noise Ratio v0.3.4...[c]" {
+version = "0.3.4";
 /*
-2015-2-17
-Version 0.3.3 - for in-house use only, do not distribute
+2015-2-23
+Version 0.3.4 - for in-house use only, do not distribute
 
 This macro opens a directory and does an analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -72,7 +72,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addCheckboxGroup(3, 3, newArray("Polygon Bounding", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Filtering(Experimental)", "Advanced Options", "User Defined Area"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
+Dialog.addCheckboxGroup(3, 3, newArray("Force Polygon", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Filtering(Experimental)", "Advanced Options", "User Defined Area"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
 Dialog.show();
 
 //Retrieve Choices
@@ -89,13 +89,6 @@ advanced = Dialog.getCheckbox();
 user_area = Dialog.getCheckbox();
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
-
-if (poly == false) {
-	Dialog.create("Warning");
-	Dialog.addMessage("The Ellipse function is running an older algorithm for bounding.");
-	Dialog.addMessage("If you wish to continue using the Ellipse function instead of the Polygon function, press \"Cancel\" and reduce the Bounding Stringency to 0.1 instead 0.25.");
-	Dialog.show();
-	}
 
 //Warn if Choices are outside of recommended range
 if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 5 || tolerance_maxima < 2 || maxima > 50) {
@@ -149,13 +142,13 @@ run("Table...", "name=Condense width=400 height=200");
 //Initialize SNR table
 if (poly == false ) print("[SNR]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
 else print("[SNR]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Warning Code");
+print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly, Warning Code");
 
 //Initialize Condensed Table
 if (poly == false ) print("[Condense]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
 else print("[Condense]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-if (spotbyspot == true) print("[Condense]", "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Warning Code");
-else print("[Condense]", "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Warning Code");
+if (spotbyspot == true) print("[Condense]", "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Poly, Warning Code");
+else print("[Condense]", "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly, Warning Code");
 
 //Initialize Peak and Sum intensity tables if option was chosen
 if (peak_intensity == true) print("[Peak]", "Peak Brightness");
@@ -233,6 +226,7 @@ function SNR_main(dir, sub) {
 			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice
 			else {
 			//Initialize Image
+			ellipse = false;
 			print("File: " + path);
 			height = getHeight();
 			width = getWidth();
@@ -296,8 +290,8 @@ function SNR_main(dir, sub) {
 				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
 				run("Measure");
 				String.resetBuffer;
-				String.append(path + ", ");
-				for (n = 1; n < nResults; n++) String.append(getResult("Mean", n) + ", ");
+				String.append(path);
+				for (n = 1; n < nResults; n++) String.append(", " + getResult("Mean", n));
 				print("[Peak]", String.buffer);
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
@@ -312,8 +306,8 @@ function SNR_main(dir, sub) {
 					setResult("Sum Intensity", q, nPixels * mean);
 					}
 				String.resetBuffer;
-				String.append(path + ", ");
-				for (n = 1; n < nResults; n++) String.append(getResult("Sum Intensity", n) + ", ");
+				String.append(path);
+				for (n = 1; n < nResults; n++) String.append(", " + getResult("Sum Intensity", n));
 				print("[Sum]", String.buffer);
 				}
 			if (peak_intensity == false && sum_intensity == false) {
@@ -349,10 +343,21 @@ function SNR_main(dir, sub) {
 				y_values = Array.concat(y_values, getResult("Y", q));
 				}
 			//Expand dots
-			if (poly == false) { //Run the faster dots program
-				for (q = 0; q < nResults; q++) {
-					SNR_dots(x_values[q], y_values[q]); //Run dots with different x and y values
-					}//End of dots loop
+			if (x_values.length > 5000 && poly == false) { //Run the faster dots program if there's too many dots
+				ellipse = true;
+				for (q = 0; q < x_values.length; q++) {
+					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
+					if (spotbyspot == true) {
+						north = Array.concat(north, cardinal[0]);
+						northeast = Array.concat(northeast, 0);
+						east = Array.concat(east, cardinal[1]);
+						southeast = Array.concat(southeast, 0);
+						south = Array.concat(south, cardinal[2]);
+						southwest = Array.concat(southwest, 0);
+						west = Array.concat(west, cardinal[3]);
+						northwest = Array.concat(northwest, 0);
+						}
+					} //End of dots loop
 				}
 			else { //Run the slower polygon program
 				for (q = 0; q < x_values.length; q++) {
@@ -391,7 +396,8 @@ function SNR_main(dir, sub) {
 				selectImage(window_MaxIP);
 				for (q = 0; q < x_values.length; q++) {
 					run("Select None");
-					makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
+					if (ellipse == false) makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
+					else makeOval(x_values[q] - west[q], y_values[q] + north[q], east[q] + west[q], north[q] + south[q]);
 					run("Measure");
 					mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
 					//print(getResult("Mean", nResults-1));
@@ -580,9 +586,9 @@ function SNR_main(dir, sub) {
 				
 			//Results
 			array_results = newArray();
-			if (spotbyspot == true && x_values_high.length > 0) array_results = SNR_bright_results();
-			else if (spotbyspot == true && x_values_high.length == 4) array_results = SNR_bright_results_null();
-			else array_results = SNR_results();
+			if (spotbyspot == true && x_values_high.length > 0) array_results = SNR_bright_results(); //If doing spot by spot and there are bright spots
+			else if (spotbyspot == true && x_values_high.length == 0) array_results = SNR_bright_results_null(); //If doing spot by spot and there are no bright spots
+			else array_results = SNR_results(); //If not doing spot by spot
 			
 			//Prep Images
 			selectImage(window_MaxIP);
@@ -704,41 +710,119 @@ function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, pos
 	run("Select None");
 	} //End of signal function
 
-function SNR_dots(xi, yi) { //Searches N, S, E, W and then draws an ellipse on mask image
+function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an ellipse on mask image
 	selectImage(window_MaxIP);
-	bright = getPixel(xi,yi);
+	bright = getPixel(xi,yi) - back_median;
+	cardinal = newArray(0, 0, 0, 0); //Array for directions
 	cap = 0;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r < 8; r++); //Progress r until there is a drop in brightness (>10% default)
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r + 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++); //Progress r until there is no change in brightness (<10% default)
-	x2 = xi + r; //right
+	//North Point
+	for (r = 0; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++); //Get Relative brightness of brightest pixel
+	pixel = newArray();
+	pixel_avg = 1;
+	//print(pixel.length, pixel_avg);
+	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
+		pixel = Array.concat(pixel, getPixel(xi, yi + r) - back_median); //Add new pixel to pixel array
+		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
+		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
+		for (p = 0; p < pixel_dif.length; p++) { //Calculate the pixel_dif
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
+			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			}
+		if (pixel_dif.length >= 1) { //Get average of pixel_dif
+			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
+			}
+		//print(pixel.length, pixel_avg);
+		}
+	if (pixel.length > 0) {
+		if (pixel.length < 3) r-=pixel.length;
+		else r-=2;
+		}
+	cardinal[0] = r; 
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi + r, yi)/bright > 1 - tolerance_bounding && r > -8; r--);
-	for (r = r; (getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright > tolerance_bounding || getPixel(xi + r, yi)/bright - getPixel(xi + r - 1, yi)/bright < - tolerance_bounding * tolerance_upward) && r > -15; r--);
-	x1 = xi + r; //left
-	if (r <= -5) cap ++;
-	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r < 8; r++);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r + 1)/bright < - tolerance_bounding * tolerance_upward) && r < 15; r++);
-	y2 = yi + r; //top
+	//East point
+	for (r = 0; (getPixel(xi + r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
+	pixel = newArray();
+	pixel_avg = 1;
+	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
+		pixel = Array.concat(pixel, getPixel(xi + r, yi)); //Add new pixel to pixel array
+		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
+		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
+		for (p = 0; p < pixel_dif.length; p++) {
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
+			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			}
+		if (pixel_dif.length >= 1) { 
+			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
+			}
+		}
+	if (pixel.length > 0) {
+		if (pixel.length < 3) r-=pixel.length;
+		else r-=2;
+		}
+	cardinal[1] = r;
 	if (r >= 5) cap ++;
 	
-	for (r = 0; getPixel(xi, yi + r)/bright > 1 - tolerance_bounding && r > -8; r--);
-	for (r = r; (getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright > tolerance_bounding || getPixel(xi, yi + r)/bright - getPixel(xi, yi + r - 1)/bright < - tolerance_bounding * tolerance_upward) && r > -15; r--);
-	y1 = yi + r; //bottom
-	if (r <= -5) cap ++;
+	//South Point
+	for (r = 0; (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop && r < 8; r++);;
+	pixel = newArray();
+	pixel_avg = 1;
+	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
+		pixel = Array.concat(pixel, getPixel(xi, yi - r) - back_median); //Add new pixel to pixel array
+		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
+		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
+		for (p = 0; p < pixel_dif.length; p++) {
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
+			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			}
+		if (pixel_dif.length >= 1) { 
+			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
+			}
+		}
+	if (pixel.length > 0) {
+		if (pixel.length < 3) r-=pixel.length;
+		else r-=2;
+		}
+	cardinal[2] = r; 
+	if (r >= 5) cap ++;
 	
-	w = x2-x1;
-	h = y2-y1;
+	//West point
+	for (r = 0; (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
+	pixel = newArray();
+	pixel_avg = 1;
+	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
+		pixel = Array.concat(pixel, getPixel(xi - r, yi)); //Add new pixel to pixel array
+		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
+		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
+		for (p = 0; p < pixel_dif.length; p++) {
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
+			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			}
+		if (pixel_dif.length >= 1) { 
+			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
+			}
+		}
+	if (pixel.length > 0) {
+		if (pixel.length < 3) r-=pixel.length;
+		else r-=2;
+		}
+	cardinal[3] = r;
+	if (r >= 5) cap ++;
 	
 	if (cap <= 2 || count_bad == true) {
-		selectImage(window_signal);
-		fillOval(x1, y1, w, h);
+		selectImage(window);
+		fillOval(xi - cardinal[3], yi + cardinal[0], cardinal[1] + cardinal[3], cardinal[0] + cardinal[2]);
+		return cardinal;
 		}
 	else {
 		spot_count --;
 		bad_spots ++;
+		return cardinal;
 		}
 	}//End of dot function
 
@@ -751,7 +835,7 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 	
 	//North point
 	//print("New Spot");
-	for (r = 0; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++);; //Get Relative brightness of brightest pixel
+	for (r = 0; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++); //Get Relative brightness of brightest pixel
 	pixel = newArray();
 	pixel_avg = 1;
 	//print(pixel.length, pixel_avg);
@@ -1055,6 +1139,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Spots", nResults - 3, spot_count);
 	setResult("Bad Spots", nResults - 3, bad_spots);
 	setResult("Maxima", nResults - 3, maxima);
+	if (ellipse == false) setResult("Poly", nResults - 3, "True");
+	else setResult("Poly", nResults - 3, "False");
 	
 	//Set Warnings
 	/*Warning Codes
@@ -1094,6 +1180,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
+	if (ellipse == false) setResult("Poly", nResults - 1, "True");
+	else setResult("Poly", nResults - 1, "False");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
@@ -1105,7 +1193,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	return newArray(signoimedian, sigrel, noirel);
 	}
 
-function SNR_bright_results() { //String Manipulation and Saves results to tables
+function SNR_bright_results() { //String Manipulation and Saves results to tables for bright spots
 	//REGULAR SPOTS
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 4) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -1115,6 +1203,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
 	
 	//BRIGHT SPOTS
+	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	signoimedian_bright = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
@@ -1123,8 +1212,10 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 
 	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
 	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
+	setResult("Coefficient of Variation", nResults - 4, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Bright Signal CV
 	setResult("Coefficient of Variation", nResults - 4, getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4)); //Regular Signal CV
 	setResult("Mean SNR", nResults - 4, signoimean);
+	setResult("Mean SNR", nResults - 3, signoimean_bright);
 	setResult("Median SNR", nResults - 4, signoimedian);
 	setResult("Median SNR", nResults - 3, signoimedian_bright);
 	setResult("Signal", nResults - 4, sigrel);
@@ -1133,6 +1224,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Spots", nResults - 4, spot_count);
 	setResult("Bad Spots", nResults - 4, bad_spots);
 	setResult("Maxima", nResults - 4, maxima);
+	if (ellipse == false) setResult("Poly", nResults - 4, "True");
+	else setResult("Poly", nResults - 4, "False");
 	
 	//Set Warnings
 	/*Warning Codes
@@ -1174,6 +1267,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
+	if (ellipse == false) setResult("Poly", nResults - 1, "True");
+	else setResult("Poly", nResults - 1, "False");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
@@ -1185,7 +1280,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright);
 	}
 
-function SNR_bright_results_null() { //String Manipulation and Saves results to tables
+function SNR_bright_results_null() { //String Manipulation and Saves results to tables when no bright spots are found
 	//REGULAR SPOTS
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -1211,6 +1306,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Spots", nResults - 3, spot_count);
 	setResult("Bad Spots", nResults - 3, bad_spots);
 	setResult("Maxima", nResults - 3, maxima);
+	if (ellipse == false) setResult("Poly", nResults - 3, "True");
+	else setResult("Poly", nResults - 3, "False");
 	
 	//Set Warnings
 	/*Warning Codes
@@ -1252,6 +1349,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
+	if (ellipse == false) setResult("Poly", nResults - 1, "True");
+	else setResult("Poly", nResults - 1, "False");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
