@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.3.4...[c]" {
-version = "0.3.4";
+macro "Calculate Signal to Noise Ratio v0.4...[c]" {
+version = "0.4";
 /*
-2015-2-23
-Version 0.3.4 - for in-house use only, do not distribute
+2015-2-24
+Version 0.4 - for in-house use only, do not distribute
 
 This macro opens a directory and does an analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -43,7 +43,7 @@ tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smalle
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
 poly = true;
-tolerance_maxima = 4;
+tolerance_maxima = 5;
 sum_intensity = false;
 peak_intensity = false;
 plot = false;
@@ -59,7 +59,7 @@ warning_cvspot = 0.5;
 warning_cvnoise = 0.25;
 warning_spot = 100;
 warning_badspot = 20;
-warning_disable = false;
+warning_disable = true;
 exclude = "NULL";
 low_user = 3;
 high_user = 4;
@@ -139,18 +139,25 @@ if (peak_intensity == true) run("Table...", "name=Peak width=400 height=200");
 if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
-//Initialize SNR table
-if (poly == false ) print("[SNR]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
-else print("[SNR]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-print("[SNR]", "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly, Warning Code");
+//Write table headers
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start;
+if (poly == false ) table_head += " Ellipse";
+else table_head += " Polygon";
+print("[SNR]", table_head);
+print("[Condense]", table_head);
 
-//Initialize Condensed Table
-if (poly == false ) print("[Condense]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Ellipse");
-else print("[Condense]", "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " Polygon");
-if (spotbyspot == true) print("[Condense]", "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Poly, Warning Code");
-else print("[Condense]", "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly, Warning Code");
+//Write Table Labels
+table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly";
+if (warning_disable == false) table_head += "Warning Code";
+print("[SNR]", table_head);
 
-//Initialize Peak and Sum intensity tables if option was chosen
+if (spotbyspot == true) table_head = "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Poly";
+else table_head = "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly";
+if (warning_disable == false) table_head += ", Warning Code";
+print("[Condense]", table_head);
+
+
+//Initialize Peak and Sum intensity tables
 if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
@@ -166,8 +173,10 @@ outDir = outDir + output_name + "\\";//Create specific output directory
 File.makeDirectory(outDir); //Create specific output directory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
 
+
 //RUN IT!
 SNR_main(dir, ""); 
+
 
 //Save it!
 if (indexOf(getVersion(), "1.49n") > -1) { //Save as Text if running 1.49n
@@ -245,7 +254,7 @@ function SNR_main(dir, sub) {
 				run("Enhance Contrast", "saturated=0.01");
 				setBatchMode('show');
 				Dialog.create("User Defined Area Option");
-				Dialog.addRadioButtonGroup("Would you like to Exclude your selection from the analysis or only analyze your selection?", newArray("Exclude my selection", "Only analyze my selection", "Analyze the whole image"), 2, 2, "Exclude my selection");
+				Dialog.addRadioButtonGroup("Would you like to Exclude your selection from the analysis or only analyze your selection?\nPlease ensure some extra and intra cellular areas will be analyzed", newArray("Exclude my selection", "Only analyze my selection", "Analyze the whole image"), 2, 2, "Exclude my selection");
 				Dialog.show();
 				user_area_rev = Dialog.getRadioButton();
 				if (matches(user_area_rev, "Exclude my selection")) user_area_rev = true;
@@ -282,6 +291,8 @@ function SNR_main(dir, sub) {
 			//Determine Maxima
 			selectImage(window_MaxIP);
 			maxima = SNR_maximasearch();
+			selectImage(window_MaxIP);
+			roiManager("Select", 0);
 			run("Clear Results");
 			
 			//Run peak intensity and Sum intensity measurments
@@ -540,8 +551,8 @@ function SNR_main(dir, sub) {
 					}
 				
 				//Run Noise
-				if (x_values_high.length > 0) SNR_noise(1, 3); //Give inverse of regular and high signal
-				else SNR_noise(2, 2);
+				if (x_values_high.length > 0) SNR_noise(); //Give inverse of regular and high signal
+				else SNR_noise();
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Cell Noise");
 				updateResults();
@@ -572,7 +583,7 @@ function SNR_main(dir, sub) {
 				updateResults();
 				
 				//Run Noise
-				SNR_noise(2, 2);
+				SNR_noise();
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Cell Noise");
 				updateResults();
@@ -665,6 +676,7 @@ function SNR_main(dir, sub) {
 						run("Draw", "slice");
 						}
 					}
+				run("Reverse");
 				}
 			
 			run("Select None");
@@ -687,7 +699,7 @@ function SNR_background() { //Measures background, the darkest part, where there
 	run("Select None"); //Don't forget to set the File name and description in results
 	} //End of Function
 
-function SNR_noise(roi1, roi2) { //Measures Cell Noise, ensure dots and inverse dots are in the ROI manager, positions 0 and 1 respectively
+function SNR_noise() { //Measures Cell Noise
 	selectImage(window_Median);
 	run("Select None");
 	roiManager("Select", 0);
@@ -696,8 +708,8 @@ function SNR_noise(roi1, roi2) { //Measures Cell Noise, ensure dots and inverse 
 	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
 	run("Enlarge...", "enlarge=11 pixel"); //Expand Cell noise boundary; Needed for exceptional images
 	roiManager("Add");
-	roiManager("Select", newArray(0, roi1, roi2, roiManager("Count") - 1)); //Select Inverse dots and Cell Noise
-	roiManager("AND"); //Select regions of Cell Noise and inverse of dots
+	roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
+	roiManager("AND"); //Select regions of Cell Noise
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
 	}//End of Noise function
@@ -1063,6 +1075,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	//Get first slope value
 	slope = (getResult("Count", nResults - 1) - getResult("Count", nResults - 2));
 	updateResults();
+	slope_second = newArray();
 	do { //Loop until the slope of the count levels out
 		//Get the next Spot Count
 		roiManager("Select", 0);
@@ -1072,31 +1085,37 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		
 		//Add slopes to slope array
 		slope = Array.concat(slope, getResult("Count", nResults - 1) - getResult("Count", nResults - 2));
-		if (slope.length >= 6) slope = Array.slice(slope, 1, 6);
+		if (slope.length >= 13) slope = Array.slice(slope, 1, 13);
 		maxima += 5;
 		
-		//Add second degree slopes to slope_second array
-		slope_second = newArray();
-		for (i = 1; i < slope.length; i++) slope_second = Array.concat(slope_second, abs(slope[i-1] - slope[i]));
-		if (slope_second.length >= 5) slope_second = Array.slice(slope_second, 1, 5);
 		
-		Array.getStatistics(slope_second, dummy, dummy, slope_second_avg, dummy); //Get the average of slope_second
+		slope_second = Array.concat(slope_second, pow(slope[slope.length-2] - slope[slope.length-1], 2)); //Add new second slope value
+		if (slope_second.length == 15) slope_second = Array.slice(slope_second, 1, slope_second.length); //
+		
+		//Weighted average of second slope
+		temp = 0;
+		for (n = 0; n < slope_second.length; n ++) {
+			slope_second_avg += slope_second[n] * (n + 1);
+			temp += n + 1;
+			}
+		slope_second_avg = slope_second_avg / temp;
+		
+		//Array.getStatistics(slope_second, dummy, dummy, slope_second_avg, dummy); //Get the average of slope_second
 		//Debug
 		//print("\nSlope");
 		//Array.print(slope);
 		//print("Slope_Second");
 		//Array.print(slope_second);
-		//print("slope__second_avg: " + slope_second_avg);
-		} while (slope_second_avg > tolerance_maxima)  //Keep going as long as the average second_slope is greater than 4 (default)
-	maxima -= slope.length * 2.5; //Once the condition has been met drop maxima back half the number of steps to make it the middle of the window
+		//print("slope_second_avg: " + slope_second_avg);
+		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
+	maxima -= slope.length * 5 * 0.707; //Once the condition has been met drop maxima back 70.7%
 	updateResults();
-	
 	if (plot == true) { //Create plots for maxima results
 		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
-			updateResults(); //Not Required
+			updateResults();
 			}
 		
 		start = nResults / 2 - 9;
@@ -1105,18 +1124,17 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		if (stop > nResults) stop = nResults;
 		for (n = start; n < stop; n++) { //Add Maxima and Count values to an array
 			xvalues = Array.concat(xvalues, getResult("Maxima", n));
-			yvalues = Array.concat(yvalues, getResult("Count", n));
+			yvalues = Array.concat(yvalues, log(getResult("Count", n))/log(10));
 			}
 		xvalues = Array.slice(xvalues, 1, xvalues.length - 1); //Remove first x value
 		yvalues = Array.slice(yvalues, 1, yvalues.length - 1); //Remove first y value
-		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues); //Make plot
+		Plot.create("Plot", "Maxima", "log(Count)", xvalues, yvalues); //Make plot
 		Plot.drawLine(maxima, yvalues[yvalues.length - 1], maxima, yvalues[0]); //Draw vertical line at maxima
 		Plot.show();
 		selectWindow("Plot");
 		saveAs("PNG", outDir + "\\Plots\\" + stripath); //Save plot
 		close();
 		}
-	updateResults();
 	return maxima;
 	}
 
