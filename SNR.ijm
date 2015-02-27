@@ -63,6 +63,9 @@ warning_disable = true;
 exclude = "NULL";
 low_user = 3;
 high_user = 4;
+gauss_offset = 2; //Limit for standard deviation
+gauss_d = 2; //Number of standard deviations to move outward
+
 
 //Dialog
 Dialog.create("Spot Processor");
@@ -253,29 +256,17 @@ function SNR_main(dir, sub) {
 				selectImage(window_MaxIP);
 				run("Enhance Contrast", "saturated=0.01");
 				setBatchMode('show');
-				Dialog.create("User Defined Area Option");
-				Dialog.addRadioButtonGroup("Would you like to Exclude your selection from the analysis or only analyze your selection?\nPlease ensure some extra and intra cellular areas will be analyzed", newArray("Exclude my selection", "Only analyze my selection", "Analyze the whole image"), 2, 2, "Exclude my selection");
-				Dialog.show();
-				user_area_rev = Dialog.getRadioButton();
-				if (matches(user_area_rev, "Exclude my selection")) user_area_rev = true;
-				if (matches(user_area_rev, "Only analyze my selection")) user_area_rev = false;
-				if (matches(user_area_rev, "Analyze the whole image")) {
+				user_area_rev = getBoolean("Press \"Yes\" to analyze all but your selection\nPress \"No\" to analyze only your selection");
+				setTool("freehand");
+				waitForUser("Press \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
+				setBatchMode('hide');
+				if (selectionType() >= 0 && selectionType() < 4) {
+					if (user_area_rev == true) run("Make Inverse");
+					roiManager("Add");
+					}
+				else {
 					run("Select All");
 					roiManager("Add");
-					setBatchMode('hide');
-					}
-				else { //
-					setTool("freehand");
-					waitForUser("Press \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
-					setBatchMode('hide');
-					if (selectionType() >= 0 && selectionType() < 4) {
-						if (user_area_rev == true) run("Make Inverse");
-						roiManager("Add");
-						}
-					else {
-						run("Select All");
-						roiManager("Add");
-						}
 					}
 				}
 			else {
@@ -718,6 +709,12 @@ function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, pos
 	selectImage(window_MaxIP);
 	roiManager("Select", newArray(0, roi));
 	roiManager("AND");
+	
+	selectImage(window_MaxIP);
+	setBatchMode('show');
+	waitForUser("test");
+	setBatchMode('hide');
+	
 	run("Measure");
 	run("Select None");
 	} //End of signal function
@@ -1054,6 +1051,85 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 		return cardinal;
 		}
 	}//End of crazy polygon function
+
+function SNR_gaussian_search(pixels, cardinal, xory) { //Does the gaussian fit
+	counting = newArray(-2, -1, 0, 1, 2);
+	Fit.doFit(12, counting, pixels);
+	if (xory == 0) {
+		cardinal[1] = Fit.p(2) + (Fit.p(3) * gauss_d);
+		cardinal[3] = (Fit.p(3) * gauss_d) - Fit.p(2);
+		}
+	else {
+		cardinal[2] = Fit.p(2) + (Fit.p(3) * gauss_d);
+		cardinal[0] = (Fit.p(3) * gauss_d) - Fit.p(2);
+		}
+	
+	for (r = 0; Fit.p(3) > gauss_offset && r < 7; r ++) {
+		//Array.print(pixels); //Debug
+		pixels = Array.concat(pixels, getPixel(xi-3-r, yi));
+		pixels = Array.concat(pixels, getPixel(xi+3+r, yi));
+		counting = Array.concat(counting, newArray(-3-r, 3+r));
+		Fit.doFit(12, counting, pixels);
+		if (xory == 0) {
+			cardinal[1] = Fit.p(2) + (Fit.p(3) * gauss_d);
+			cardinal[3] = (Fit.p(3) * gauss_d) - Fit.p(2);
+			}
+		else {
+			cardinal[2] = Fit.p(2) + (Fit.p(3) * gauss_d);
+			cardinal[0] = (Fit.p(3) * gauss_d) - Fit.p(2);
+			}
+		}
+	
+	return Fit.p(2);
+	}
+
+function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and draws a circle around that sub pixel area
+	selectImage(window_MaxIP);
+	cardinal = newArray(0, 0, 0, 0); //X and Y offsets
+	cap = 0;
+	
+	//X Search
+	x_bright = getPixel(xi-2, yi);
+	x_bright = Array.concat(x_bright, getPixel(xi-1, yi));
+	x_bright = Array.concat(x_bright, getPixel(xi, yi));
+	x_bright = Array.concat(x_bright, getPixel(xi+1, yi));
+	x_bright = Array.concat(x_bright, getPixel(xi+2, yi));
+	x_center = SNR_gaussian_search(x_bright, cardinal, 0);
+	//print("X: " + Fit.p(3)); //Debug
+	
+	//Y Search
+	y_bright = getPixel(xi, yi-2);
+	y_bright = Array.concat(y_bright, getPixel(xi, yi-1));
+	y_bright = Array.concat(y_bright, getPixel(xi, yi));
+	y_bright = Array.concat(y_bright, getPixel(xi, yi+1));
+	y_bright = Array.concat(y_bright, getPixel(xi, yi+2));
+	y_center = SNR_gaussian_search(y_bright, cardinal, 1);
+	//print("Offsets: " + x_center + ", " + y_center);
+	//print("Y: " + Fit.p(3));//Debug
+	//print(cardinal[0] + ", " + cardinal[1] + ", " + cardinal[2] + ", " + cardinal[3]);
+	
+	/*selectImage(window_MaxIP);
+	makeOval(xi - cardinal[3], yi - cardinal[0], cardinal[1] + cardinal[3], cardinal[0] + cardinal[2]);
+	setBatchMode('show');
+	waitForUser("test");
+	setBatchMode('hide');*/
+	
+	//Prevent offset in signal mask
+	xi++;
+	yi++;
+	
+	if (cap == 0 || count_bad == true) {
+		selectImage(window);
+		fillOval(xi - cardinal[3], yi - cardinal[0], cardinal[1] + cardinal[3], cardinal[0] + cardinal[2]);
+		return cardinal;
+		}
+	else {
+		spot_count --;
+		bad_spots ++;
+		return cardinal;
+		}
+	}
+	
 
 function SNR_maximasearch() { //Searches until the slope of the spot count levels out
 	maxima = maxima_start;
