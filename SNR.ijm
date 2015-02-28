@@ -25,6 +25,7 @@ run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear");
 run("Clear Results");
+run("Close All");
 
 
 
@@ -667,7 +668,7 @@ function SNR_main(dir, sub) {
 						run("Draw", "slice");
 						}
 					}
-				run("Reverse");
+				//run("Reverse");
 				}
 			
 			run("Select None");
@@ -709,12 +710,12 @@ function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, pos
 	selectImage(window_MaxIP);
 	roiManager("Select", newArray(0, roi));
 	roiManager("AND");
-	
+	/*
 	selectImage(window_MaxIP);
 	setBatchMode('show');
 	waitForUser("test");
 	setBatchMode('hide');
-	
+	*/
 	run("Measure");
 	run("Select None");
 	} //End of signal function
@@ -1066,8 +1067,14 @@ function SNR_gaussian_search(pixels, cardinal, xory) { //Does the gaussian fit
 	
 	for (r = 0; Fit.p(3) > gauss_offset && r < 7; r ++) {
 		//Array.print(pixels); //Debug
-		pixels = Array.concat(pixels, getPixel(xi-3-r, yi));
-		pixels = Array.concat(pixels, getPixel(xi+3+r, yi));
+		if (xory == 0) {
+			pixels = Array.concat(pixels, getPixel(xi-3-r, yi));
+			pixels = Array.concat(pixels, getPixel(xi+3+r, yi));
+			}
+		else {
+			pixels = Array.concat(pixels, getPixel(xi, yi-3-r));
+			pixels = Array.concat(pixels, getPixel(xi, yi+3+r));
+			}
 		counting = Array.concat(counting, newArray(-3-r, 3+r));
 		Fit.doFit(12, counting, pixels);
 		if (xory == 0) {
@@ -1129,7 +1136,6 @@ function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and
 		return cardinal;
 		}
 	}
-	
 
 function SNR_maximasearch() { //Searches until the slope of the spot count levels out
 	maxima = maxima_start;
