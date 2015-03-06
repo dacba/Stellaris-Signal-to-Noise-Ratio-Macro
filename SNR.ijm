@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.4...[c]" {
-version = "0.4";
+macro "Calculate Signal to Noise Ratio v0.4.1...[c]" {
+version = "0.4.1";
 /*
-2015-2-24
-Version 0.4 - for in-house use only, do not distribute
+2015-3-5
+Version 0.4.1 - for in-house use only, do not distribute
 
 This macro opens a directory and does an analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -10,7 +10,7 @@ Uses Find Maxima to find spots and expand the points to a selection used for spo
 Use the Default threshold to determine cell noise and background values
 
 In regards to Significant Figures
-	All pixels are treated as exact numbers, thus no significant figures rules apply to them or results obtained from them.
+	All pixels are treated as exact numbers, results are capped to three decimal places, however the limiting sigfig is 10 (from sqrt2 multiplication in polygon program)
 
 Tested on ImageJ version 1.49o
 !!!1.49n does not work as intended!!!
@@ -43,7 +43,7 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
-poly = true;
+expansion_method = "Normal";
 tolerance_maxima = 5;
 sum_intensity = false;
 peak_intensity = false;
@@ -76,7 +76,8 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addCheckboxGroup(3, 3, newArray("Force Polygon", "Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Filtering(Experimental)", "Advanced Options", "User Defined Area"), newArray(poly, sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
+Dialog.addChoice("Signal Mask Option:", newArray("Normal", "Force Polygon", "Gaussian"));
+Dialog.addCheckboxGroup(3, 2, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Filtering(Experimental)", "Advanced Options", "User Defined Area"), newArray(sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
 Dialog.show();
 
 //Retrieve Choices
@@ -84,7 +85,7 @@ tolerance_bounding = Dialog.getNumber();
 tolerance_upward = Dialog.getNumber();
 maxima = Dialog.getNumber();
 tolerance_maxima = Dialog.getNumber();
-poly = Dialog.getCheckbox();
+expansion_method = Dialog.getChoice();
 sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
@@ -144,19 +145,17 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Write table headers
-table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start;
-if (poly == false ) table_head += " Ellipse";
-else table_head += " Polygon";
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method;
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
 //Write Table Labels
-table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly";
+table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Expansion Method";
 if (warning_disable == false) table_head += "Warning Code";
 print("[SNR]", table_head);
 
-if (spotbyspot == true) table_head = "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Poly";
-else table_head = "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Poly";
+if (spotbyspot == true) table_head = "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Expansion Method";
+else table_head = "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Expansion Method";
 if (warning_disable == false) table_head += ", Warning Code";
 print("[Condense]", table_head);
 
@@ -166,7 +165,7 @@ if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
-output_name = "Results " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
+output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 if (spotbyspot == true) output_name += "-filtered-" + low_user + "-" + high_user;
 if (user_area == true) output_name += "-selection-" + toHex(round(random*random*random*100000000));
 
@@ -226,6 +225,7 @@ function SNR_main(dir, sub) {
 	list = getFileList(dir + sub);//get file list 
 	n = 0;
 	for (i=0;i<list.length; i++){ //for each file
+		showProgress(1/list.length-1);
 		path = sub + list[i];
 		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) {
 			//File.makeDirectory(outDir + path); //Recreate file system in output folder
@@ -239,7 +239,7 @@ function SNR_main(dir, sub) {
 			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice
 			else {
 			//Initialize Image
-			ellipse = false;
+			reduced_cardinal = false;
 			print("File: " + path);
 			height = getHeight();
 			width = getWidth();
@@ -345,9 +345,26 @@ function SNR_main(dir, sub) {
 				x_values = Array.concat(x_values, getResult("X", q));
 				y_values = Array.concat(y_values, getResult("Y", q));
 				}
+			
 			//Expand dots
-			if (x_values.length > 5000 && poly == false) { //Run the faster dots program if there's too many dots
-				ellipse = true;
+			if (expansion_method == "Gaussian") { //If gaussian is selected run the gaussian fitting
+				reduced_cardinal = true;
+				for (q = 0; q < x_values.length; q++) {
+					cardinal = SNR_gaussian(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
+					if (spotbyspot == true) {
+						north = Array.concat(north, cardinal[0]);
+						northeast = Array.concat(northeast, 0);
+						east = Array.concat(east, cardinal[1]);
+						southeast = Array.concat(southeast, 0);
+						south = Array.concat(south, cardinal[2]);
+						southwest = Array.concat(southwest, 0);
+						west = Array.concat(west, cardinal[3]);
+						northwest = Array.concat(northwest, 0);
+						}
+					} //End of dots loop
+				}
+			else if (x_values.length > 3000 && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
+				reduced_cardinal = true;
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (spotbyspot == true) {
@@ -362,7 +379,7 @@ function SNR_main(dir, sub) {
 						}
 					} //End of dots loop
 				}
-			else { //Run the slower polygon program
+			else { //Force polygon or if running on normal and less than 3000
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (spotbyspot == true) {
@@ -399,7 +416,7 @@ function SNR_main(dir, sub) {
 				selectImage(window_MaxIP);
 				for (q = 0; q < x_values.length; q++) {
 					run("Select None");
-					if (ellipse == false) makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
+					if (reduced_cardinal == false) makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
 					else makeOval(x_values[q] - west[q], y_values[q] + north[q], east[q] + west[q], north[q] + south[q]);
 					run("Measure");
 					mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
@@ -871,10 +888,10 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 	if (r >= 5) cap ++;
 
 	//Northeast point
-	for (r = 0; (getPixel(xi + r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);; 
+	for (r = 0; (getPixel(xi + r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);; 
 	pixel = newArray();
 	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414 && r < 15; r++) {
+	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi + r, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -919,10 +936,10 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 	if (r >= 5) cap ++;
 	
 	//Southeast point
-	for (r = 0; (getPixel(xi + r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);;
+	for (r = 0; (getPixel(xi + r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414 && r < 15; r++) {
+	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi + r, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -967,10 +984,10 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 	if (r >= 5) cap ++;
 	
 	//Southwest point
-	for (r = 0; (getPixel(xi - r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);;
+	for (r = 0; (getPixel(xi - r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414 && r < 15; r++) {
+	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi - r, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -1015,10 +1032,10 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 	if (r >= 5) cap ++;
 	
 	//Northwest point
-	for (r = 0; (getPixel(xi - r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414 && r < 8; r++);;
+	for (r = 0; (getPixel(xi - r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);;
 	pixel = newArray();
 	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414 && r < 15; r++) {
+	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi - r, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -1065,29 +1082,46 @@ function SNR_gaussian_search(pixels, cardinal, xory) { //Does the gaussian fit
 		cardinal[0] = (Fit.p(3) * gauss_d) - Fit.p(2);
 		}
 	
-	for (r = 0; Fit.p(3) > gauss_offset && r < 7; r ++) {
+	for (r = 0; Fit.p(3) > gauss_offset && r < 15; r ++) {
 		//Array.print(pixels); //Debug
 		if (xory == 0) {
-			pixels = Array.concat(pixels, getPixel(xi-3-r, yi));
-			pixels = Array.concat(pixels, getPixel(xi+3+r, yi));
+			if (getPixel(xi-3-r, yi) < getPixel(xi-2-r, yi)) {
+				pixels = Array.concat(pixels, getPixel(xi-3-r, yi));
+				counting = Array.concat(counting, -3-r);
+				}
+			if (getPixel(xi+3+r, yi) < getPixel(xi+2+r, yi)) {
+				pixels = Array.concat(pixels, getPixel(xi+3+r, yi));
+				counting = Array.concat(counting, 3+r);
+				}
 			}
 		else {
-			pixels = Array.concat(pixels, getPixel(xi, yi-3-r));
-			pixels = Array.concat(pixels, getPixel(xi, yi+3+r));
+			if (getPixel(xi, yi-3-r) < getPixel(xi, yi-2-r)) {
+				pixels = Array.concat(pixels, getPixel(xi, yi-3-r));
+				counting = Array.concat(counting, -3-r);
+				}
+			if (getPixel(xi, yi+3+r) < getPixel(xi, yi+2+r)) {
+				pixels = Array.concat(pixels, getPixel(xi, yi+3+r));
+				counting = Array.concat(counting, 3+r);
+				}
 			}
-		counting = Array.concat(counting, newArray(-3-r, 3+r));
 		Fit.doFit(12, counting, pixels);
-		if (xory == 0) {
-			cardinal[1] = Fit.p(2) + (Fit.p(3) * gauss_d);
-			cardinal[3] = (Fit.p(3) * gauss_d) - Fit.p(2);
+		if (Fit.p(3) < 2) {
+			if (xory == 0) {
+				cardinal[1] = Fit.p(2) + (Fit.p(3) * gauss_d);
+				cardinal[3] = (Fit.p(3) * gauss_d) - Fit.p(2);
+				}
+			else {
+				cardinal[2] = Fit.p(2) + (Fit.p(3) * gauss_d);
+				cardinal[0] = (Fit.p(3) * gauss_d) - Fit.p(2);
+				}
 			}
 		else {
-			cardinal[2] = Fit.p(2) + (Fit.p(3) * gauss_d);
-			cardinal[0] = (Fit.p(3) * gauss_d) - Fit.p(2);
+			Array.fill(cardinal, 0);
 			}
 		}
-	
-	return Fit.p(2);
+	//print(Fit.p(2)); //Debug
+	if (Fit.p(3) < 2) return Fit.p(2);
+	else return 0;
 	}
 
 function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and draws a circle around that sub pixel area
@@ -1103,7 +1137,7 @@ function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and
 	x_bright = Array.concat(x_bright, getPixel(xi+2, yi));
 	x_center = SNR_gaussian_search(x_bright, cardinal, 0);
 	//print("X: " + Fit.p(3)); //Debug
-	
+	yi += x_center;
 	//Y Search
 	y_bright = getPixel(xi, yi-2);
 	y_bright = Array.concat(y_bright, getPixel(xi, yi-1));
@@ -1111,10 +1145,33 @@ function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and
 	y_bright = Array.concat(y_bright, getPixel(xi, yi+1));
 	y_bright = Array.concat(y_bright, getPixel(xi, yi+2));
 	y_center = SNR_gaussian_search(y_bright, cardinal, 1);
-	//print("Offsets: " + x_center + ", " + y_center);
-	//print("Y: " + Fit.p(3));//Debug
-	//print(cardinal[0] + ", " + cardinal[1] + ", " + cardinal[2] + ", " + cardinal[3]);
 	
+	/*while (abs(x_center) >= 0.5 || abs(y_center) >= 0.5) {
+		x_bright = newArray();
+		y_bright = newArray();
+		if (abs(y_center) >= 0.5) {
+			xi += y_center;
+			x_bright = getPixel(xi-2, yi);
+			x_bright = Array.concat(x_bright, getPixel(xi-1, yi));
+			x_bright = Array.concat(x_bright, getPixel(xi, yi));
+			x_bright = Array.concat(x_bright, getPixel(xi+1, yi));
+			x_bright = Array.concat(x_bright, getPixel(xi+2, yi));
+			x_center = SNR_gaussian_search(x_bright, cardinal, 0);
+			}
+		if (abs(x_center) >= 0.5) {
+			yi += x_center;
+			y_bright = getPixel(xi, yi-2);
+			y_bright = Array.concat(y_bright, getPixel(xi, yi-1));
+			y_bright = Array.concat(y_bright, getPixel(xi, yi));
+			y_bright = Array.concat(y_bright, getPixel(xi, yi+1));
+			y_bright = Array.concat(y_bright, getPixel(xi, yi+2));
+			y_center = SNR_gaussian_search(y_bright, cardinal, 1);
+			}
+		}*/
+	//print("Y: " + Fit.p(3));//Debug
+	//print("Offsets: " + x_center + ", " + y_center);
+	//print(cardinal[0] + ", " + cardinal[1] + ", " + cardinal[2] + ", " + cardinal[3]);
+
 	/*selectImage(window_MaxIP);
 	makeOval(xi - cardinal[3], yi - cardinal[0], cardinal[1] + cardinal[3], cardinal[0] + cardinal[2]);
 	setBatchMode('show');
@@ -1239,8 +1296,10 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Spots", nResults - 3, spot_count);
 	setResult("Bad Spots", nResults - 3, bad_spots);
 	setResult("Maxima", nResults - 3, maxima);
-	if (ellipse == false) setResult("Poly", nResults - 3, "True");
-	else setResult("Poly", nResults - 3, "False");
+	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
 	/*Warning Codes
@@ -1280,8 +1339,10 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
-	if (ellipse == false) setResult("Poly", nResults - 1, "True");
-	else setResult("Poly", nResults - 1, "False");
+	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
@@ -1324,8 +1385,10 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Spots", nResults - 4, spot_count);
 	setResult("Bad Spots", nResults - 4, bad_spots);
 	setResult("Maxima", nResults - 4, maxima);
-	if (ellipse == false) setResult("Poly", nResults - 4, "True");
-	else setResult("Poly", nResults - 4, "False");
+	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 4, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 4, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 4, "Ellipse");
+	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 4, "Gaussian");
 	
 	//Set Warnings
 	/*Warning Codes
@@ -1367,8 +1430,10 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
-	if (ellipse == false) setResult("Poly", nResults - 1, "True");
-	else setResult("Poly", nResults - 1, "False");
+	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
@@ -1406,8 +1471,10 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Spots", nResults - 3, spot_count);
 	setResult("Bad Spots", nResults - 3, bad_spots);
 	setResult("Maxima", nResults - 3, maxima);
-	if (ellipse == false) setResult("Poly", nResults - 3, "True");
-	else setResult("Poly", nResults - 3, "False");
+	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
 	/*Warning Codes
@@ -1449,8 +1516,10 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Spots", nResults - 1, spot_count);
 	setResult("Bad Spots", nResults - 1, bad_spots);
 	setResult("Maxima", nResults - 1, maxima);
-	if (ellipse == false) setResult("Poly", nResults - 1, "True");
-	else setResult("Poly", nResults - 1, "False");
+	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
 	String.resetBuffer;
