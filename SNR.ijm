@@ -12,14 +12,14 @@ Use the Default threshold to determine cell noise and background values
 In regards to Significant Figures
 	All pixels are treated as exact numbers, results are capped to three decimal places, however the limiting sigfig is 10 (from sqrt2 multiplication in polygon program)
 
-Tested on ImageJ version 1.49o
+Tested on ImageJ version 1.49o, 1.48v
 !!!1.49n does not work as intended!!!
 */
 
 //Initialize
 setBatchMode(true);
 setOption("ShowRowNumbers", false);
-requires("1.49m");
+requires("1.48v");
 run("Set Measurements...", "area mean standard min median redirect=None decimal=3");
 run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
@@ -1247,10 +1247,10 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		//Array.print(slope_second);
 		//print("slope_second_avg: " + slope_second_avg);
 		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
-	maxima -= slope.length * 5 * 0.707; //Once the condition has been met drop maxima back 70.7%
+	maxima -= slope.length * 3.535; //Once the condition has been met drop maxima back 70.7%
 	updateResults();
 	if (plot == true) { //Create plots for maxima results
-		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
@@ -1263,11 +1263,11 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		if (stop > nResults) stop = nResults;
 		for (n = start; n < stop; n++) { //Add Maxima and Count values to an array
 			xvalues = Array.concat(xvalues, getResult("Maxima", n));
-			yvalues = Array.concat(yvalues, log(getResult("Count", n))/log(10));
+			yvalues = Array.concat(yvalues, getResult("Count", n));
 			}
 		xvalues = Array.slice(xvalues, 1, xvalues.length - 1); //Remove first x value
 		yvalues = Array.slice(yvalues, 1, yvalues.length - 1); //Remove first y value
-		Plot.create("Plot", "Maxima", "log(Count)", xvalues, yvalues); //Make plot
+		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues); //Make plot
 		Plot.drawLine(maxima, yvalues[yvalues.length - 1], maxima, yvalues[0]); //Draw vertical line at maxima
 		Plot.show();
 		selectWindow("Plot");
