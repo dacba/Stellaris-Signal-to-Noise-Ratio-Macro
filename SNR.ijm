@@ -1,8 +1,8 @@
-macro "Calculate Signal to Noise Ratio v0.4.1...[c]" {
-version = "0.4.1";
+macro "Calculate Signal to Noise Ratio v0.4.2...[c]" {
+version = "0.4.2";
 /*
-2015-3-5
-Version 0.4.1 - for in-house use only, do not distribute
+2015-3-13
+Version 0.4.2 - for in-house use only, do not distribute
 
 This macro opens a directory and does an analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
@@ -48,8 +48,9 @@ tolerance_maxima = 5;
 sum_intensity = false;
 peak_intensity = false;
 plot = false;
-spotbyspot = false;
+filter = true;
 user_area = false;
+rsquare = true;
 user_area_rev = false;
 //Advanced Options
 advanced = false;
@@ -60,9 +61,9 @@ warning_cvspot = 0.5;
 warning_cvnoise = 0.25;
 warning_spot = 100;
 warning_badspot = 20;
-warning_disable = true;
+warning_disable = false;
 exclude = "NULL";
-low_user = 3;
+low_user = 2;
 high_user = 4;
 gauss_offset = 2; //Limit for standard deviation
 gauss_d = 2; //Number of standard deviations to move outward
@@ -76,8 +77,8 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
-Dialog.addChoice("Signal Mask Option:", newArray("Normal", "Force Polygon", "Gaussian"));
-Dialog.addCheckboxGroup(3, 2, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "Signal Filtering(Experimental)", "Advanced Options", "User Defined Area"), newArray(sum_intensity, peak_intensity, plot, spotbyspot, advanced, user_area));
+Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
+Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Linear Fit Maxima Search", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options"), newArray(sum_intensity, peak_intensity, rsquare, plot, user_area, filter, advanced));
 Dialog.show();
 
 //Retrieve Choices
@@ -88,10 +89,11 @@ tolerance_maxima = Dialog.getNumber();
 expansion_method = Dialog.getChoice();
 sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
+rsquare = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
-spotbyspot = Dialog.getCheckbox();
-advanced = Dialog.getCheckbox();
 user_area = Dialog.getCheckbox();
+filter = Dialog.getCheckbox();
+advanced = Dialog.getCheckbox();
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
@@ -103,6 +105,8 @@ if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
+
+if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\"");
 
 if (advanced == true) { //Advanced Options Dialog
 	waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
@@ -150,12 +154,12 @@ print("[SNR]", table_head);
 print("[Condense]", table_head);
 
 //Write Table Labels
-table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Expansion Method";
+table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Score, Mean SNR, Median SNR, Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
 if (warning_disable == false) table_head += "Warning Code";
 print("[SNR]", table_head);
 
-if (spotbyspot == true) table_head = "File, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Bad Spots, Maxima, Expansion Method";
-else table_head = "File, Mean SNR, Median SNR, Signal, Noise, Spots, Bad Spots, Maxima, Expansion Method";
+if (filter == true) table_head = "File, Score, Bright Score, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
+else table_head = "File, Score, Mean SNR, Median SNR, Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
 if (warning_disable == false) table_head += ", Warning Code";
 print("[Condense]", table_head);
 
@@ -166,7 +170,7 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
-if (spotbyspot == true) output_name += "-filtered-" + low_user + "-" + high_user;
+if (filter == true) output_name += "-filtered-" + low_user + "-" + high_user;
 if (user_area == true) output_name += "-selection-" + toHex(round(random*random*random*100000000));
 
 dir = getDirectory("Choose Directory containing .nd2 files"); //Get directory
@@ -327,11 +331,11 @@ function SNR_main(dir, sub) {
 			//Initialize dot expansion
 			setColor(0);
 			spot_count = nResults;
-			bad_spots = 0;
+			filtered_spots = 0;
 			x_values = newArray();
 			y_values = newArray();
 			cardinal = newArray();
-			if (spotbyspot == true) {
+			if (filter == true) {
 				north = newArray();
 				northeast = newArray();
 				east = newArray();
@@ -351,7 +355,7 @@ function SNR_main(dir, sub) {
 				reduced_cardinal = true;
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_gaussian(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
-					if (spotbyspot == true) {
+					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
 						northeast = Array.concat(northeast, 0);
 						east = Array.concat(east, cardinal[1]);
@@ -367,7 +371,7 @@ function SNR_main(dir, sub) {
 				reduced_cardinal = true;
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
-					if (spotbyspot == true) {
+					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
 						northeast = Array.concat(northeast, 0);
 						east = Array.concat(east, cardinal[1]);
@@ -382,7 +386,7 @@ function SNR_main(dir, sub) {
 			else { //Force polygon or if running on normal and less than 3000
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
-					if (spotbyspot == true) {
+					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
 						northeast = Array.concat(northeast, cardinal[1]);
 						east = Array.concat(east, cardinal[2]);
@@ -407,7 +411,7 @@ function SNR_main(dir, sub) {
 			northwest_high = newArray();
 			mean_intensity_high = newArray();
 			
-			if (spotbyspot == true) {
+			if (filter == true) {
 				selectImage(window_signal);
 				close();
 				mean_intensity = newArray();
@@ -465,6 +469,7 @@ function SNR_main(dir, sub) {
 					if (mean_intensity[q] < low_cutoff) {
 						//print("Low " + mean_intensity[q] + " / " + low_cutoff);
 						low_counter = Array.concat(low_counter, q); //Mask for low cutoff
+						filtered_spots++;
 						}
 					else if (mean_intensity[q] > high_cutoff) {
 						//print("High " + mean_intensity[q] + " / " + high_cutoff);
@@ -513,7 +518,7 @@ function SNR_main(dir, sub) {
 				
 				print(x_values.length-low_counter.length + " Regular points processed");
 				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
-				if (bad_spots > 0) print(bad_spots + " bad points detected");
+				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
 				
 				selectImage(window_reg_signal);
 				run("Create Selection");
@@ -575,7 +580,7 @@ function SNR_main(dir, sub) {
 			else {
 				//Create Selection of signal
 				print(nResults + " points processed");
-				if (bad_spots > 0) print(bad_spots + " bad points detected");
+				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
 				selectImage(window_signal);
 				run("Create Selection");
 				roiManager("Add"); //Create Signal selection
@@ -606,8 +611,8 @@ function SNR_main(dir, sub) {
 				
 			//Results
 			array_results = newArray();
-			if (spotbyspot == true && x_values_high.length > 0) array_results = SNR_bright_results(); //If doing spot by spot and there are bright spots
-			else if (spotbyspot == true && x_values_high.length == 0) array_results = SNR_bright_results_null(); //If doing spot by spot and there are no bright spots
+			if (filter == true && x_values_high.length > 0) array_results = SNR_bright_results(); //If doing spot by spot and there are bright spots
+			else if (filter == true && x_values_high.length == 0) array_results = SNR_bright_results_null(); //If doing spot by spot and there are no bright spots
 			else array_results = SNR_results(); //If not doing spot by spot
 			
 			//Prep Images
@@ -619,12 +624,12 @@ function SNR_main(dir, sub) {
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
 			run("8-bit");
-			if (spotbyspot == true && x_values_high.length > 0) drawString(path + "\nRegular SNR: " + array_results[0] + "\nBright SNR: " + array_results[3], 10, 40, 'white');
-			else drawString(path + "\nSNR: " + array_results[0], 10, 40, 'white');
+			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[0] * array_results[1] / 100 + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[3] * array_results[4] / 100, 10, 40, 'white');
+			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[0] * array_results[1] / 100, 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
 			run("8-bit");
-			if (spotbyspot == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
+			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
 			
 			//Add Slice with Cell Noise and Signal areas on it
@@ -634,7 +639,7 @@ function SNR_main(dir, sub) {
 			run("Add Slice");
 			//Color in Noise
 			run("Select None");
-			if (spotbyspot == true && x_values_high.length > 0) {
+			if (filter == true && x_values_high.length > 0) {
 				roiManager("Select", newArray(0,2,4,5)); //Noise, inverse of regular signal and bright signal
 				roiManager("AND");
 				setColor(85);
@@ -650,7 +655,7 @@ function SNR_main(dir, sub) {
 				run("Enlarge...", "enlarge=1 pixel");
 				setForegroundColor(5, 5, 5);
 				run("Draw", "slice");
-				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + bad_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
+				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
 			else {
 				roiManager("Select", newArray(0,2,3));
@@ -661,7 +666,7 @@ function SNR_main(dir, sub) {
 				roiManager("Select", 1);
 				setColor(255);
 				fill();
-				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + bad_spots, 10, 40, 'white');
+				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + filtered_spots, 10, 40, 'white');
 				}
 			if (user_area == true) {
 				setForegroundColor(255, 255, 255);
@@ -685,7 +690,7 @@ function SNR_main(dir, sub) {
 						run("Draw", "slice");
 						}
 					}
-				//run("Reverse");
+				run("Reverse");
 				}
 			
 			run("Select None");
@@ -848,7 +853,7 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 		}
 	else {
 		spot_count --;
-		bad_spots ++;
+		filtered_spots ++;
 		return cardinal;
 		}
 	}//End of dot function
@@ -1065,7 +1070,7 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 		}
 	else {
 		spot_count --;
-		bad_spots ++;
+		filtered_spots ++;
 		return cardinal;
 		}
 	}//End of crazy polygon function
@@ -1189,7 +1194,7 @@ function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and
 		}
 	else {
 		spot_count --;
-		bad_spots ++;
+		filtered_spots ++;
 		return cardinal;
 		}
 	}
@@ -1249,6 +1254,8 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
 	maxima -= slope.length * 3.535; //Once the condition has been met drop maxima back 70.7%
 	updateResults();
+	
+	
 	if (plot == true) { //Create plots for maxima results
 		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
 			roiManager("Select", 0);
@@ -1261,6 +1268,8 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		if (start < 0) start = 0;
 		stop = nResults / 2 + 10;
 		if (stop > nResults) stop = nResults;
+		xvalues = newArray();
+		yvalues = newArray();
 		for (n = start; n < stop; n++) { //Add Maxima and Count values to an array
 			xvalues = Array.concat(xvalues, getResult("Maxima", n));
 			yvalues = Array.concat(yvalues, getResult("Count", n));
@@ -1274,38 +1283,98 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		saveAs("PNG", outDir + "\\Plots\\" + stripath); //Save plot
 		close();
 		}
+	if (rsquare == true) {
+		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+			roiManager("Select", 0);
+			run("Find Maxima...", "noise=" + n + " output=Count");
+			setResult("Maxima", nResults - 1, n);
+			updateResults();
+			}
+		if (tolerance_maxima > 9) tolerance_maxima = 0.99;
+		else tolerance_maxima = 0.9 + (tolerance_maxima/100); //0.95 default
+		xvalues = newArray();
+		yvalues = newArray();
+		for (n = 0; n < nResults - 1; n++) { //Add all Maxima and Count values to an array
+			xvalues = Array.concat(xvalues, getResult("Maxima", n));
+			yvalues = Array.concat(yvalues, getResult("Count", n));
+			}
+		
+		segments = SNR_linearize(xvalues, yvalues); //get locations of segment dividers
+		//print("Segment Locations:");
+		//Array.print(segments);
+		segments_lengths = SNR_length(segments); //Get array of segment lengths
+		//print("Segment Lengths:");
+		//Array.print(segments_lengths);
+		Array.getStatistics(segments_lengths, dumb, max, dumb, dumb);
+		n = 0;
+		while (segments_lengths[n] != max) n++; //Find the array value that matches the largest segment
+		maxima = xvalues[segments[n]] + 5;
+		return maxima;
+		}
 	return maxima;
+	}
+	
+function SNR_linearize(xvalues, yvalues) { //Returns an array with locations of segments with > 0.95 rsquared values fitting a linear regression formula
+	segments = newArray(0, 0); //Initialize array
+	p = 2;
+	while (segments[segments.length - 1] < xvalues.length) { //Keep going until you hit the end
+		//print("Testing " + segments[segments.length - 1] + " to " + p); //Debug
+		do { //From the last entry until the rsquared value drops below the tolerance
+			temp_x = Array.slice(xvalues, segments[segments.length - 1], p);
+			temp_y = Array.slice(yvalues, segments[segments.length - 1], p);
+			Fit.doFit(0, temp_x, temp_y);
+			p += 1;
+			} while (Fit.rSquared > tolerance_maxima && p < xvalues.length - 1);
+		Fit.plot;
+		//setBatchMode('show'); //Debug
+		segments = Array.concat(segments, p-2);
+		p = segments[segments.length - 1] + 2;
+		}
+	//Array.print(segments);
+	//exit(); //Debug
+	segments = Array.slice(segments, 1, segments.length - 1);
+	return segments;
+	}
+
+function SNR_length(segments) { //Returns an array with the lengths of the given segment array
+	segment_len = newArray();
+	for (n = 0; n < segments.length - 1; n++) {
+		segment_len = Array.concat(segment_len, segments[n+1] - segments[n]);
+		}
+	return segment_len;
 	}
 
 function SNR_results() { //String Manipulation and Saves results to tables
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
-	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
+	score = signoimedian * sigrel/100;
 	
 	//Set results
 	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
 		setResult("Coefficient of Variation", nResults - m, getResult("StdDev", nResults - m) / getResult("Mean", nResults - m));
 		}
+	setResult("Score", nResults - 3, score);
 	setResult("Mean SNR", nResults - 3, signoimean);
 	setResult("Median SNR", nResults - 3, signoimedian);
 	setResult("Signal", nResults - 3, sigrel);
 	setResult("Noise", nResults - 3, noirel);
 	setResult("Spots", nResults - 3, spot_count);
-	setResult("Bad Spots", nResults - 3, bad_spots);
+	setResult("Filtered Spots", nResults - 3, filtered_spots);
 	setResult("Maxima", nResults - 3, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
 	/*Warning Codes
 	1 = Low spot count (Suspicious)
-	2 = Maxima is too high
-	4 = Largely Bound Spots
+	2 = Starting Maxima is too high
+	4 = Lots of filtered spots
 	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
 	*/
 	warnings = 0;
@@ -1318,7 +1387,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 		}
 	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv for
 	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
-	if (getResult("Bad Spots", nResults - 3) > warning_badspot) warnings += 4;
+	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
@@ -1332,16 +1401,17 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	
 	//Save Condensed Results
 	setResult("File", nResults, path);
+	setResult("Score", nResults - 1, score);
 	setResult("Mean SNR", nResults - 1, signoimean);
 	setResult("Median SNR", nResults - 1, signoimedian);
 	setResult("Signal", nResults - 1, sigrel);
 	setResult("Noise", nResults - 1, noirel);
 	setResult("Spots", nResults - 1, spot_count);
-	setResult("Bad Spots", nResults - 1, bad_spots);
+	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
@@ -1358,23 +1428,27 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	//REGULAR SPOTS
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 4) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
-	signoimedian = (getResult("Median", nResults - 4) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	sigrel = getResult("Median", nResults - 4) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
+	score = signoimedian * sigrel/100;
 	
 	//BRIGHT SPOTS
 	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
-	signoimedian_bright = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
+	score_bright = signoimedian_bright * sigrel_bright/100;
 	
 	//Set results
 
 	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
 	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
-	setResult("Coefficient of Variation", nResults - 4, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Bright Signal CV
+	setResult("Coefficient of Variation", nResults - 3, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Bright Signal CV
 	setResult("Coefficient of Variation", nResults - 4, getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4)); //Regular Signal CV
+	setResult("Score", nResults - 4, score);
+	setResult("Score", nResults - 3, score_bright);
 	setResult("Mean SNR", nResults - 4, signoimean);
 	setResult("Mean SNR", nResults - 3, signoimean_bright);
 	setResult("Median SNR", nResults - 4, signoimedian);
@@ -1383,11 +1457,11 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Signal", nResults - 3, sigrel_bright);
 	setResult("Noise", nResults - 4, noirel);
 	setResult("Spots", nResults - 4, spot_count);
-	setResult("Bad Spots", nResults - 4, bad_spots);
+	setResult("Filtered Spots", nResults - 4, filtered_spots);
 	setResult("Maxima", nResults - 4, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 4, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 4, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 4, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 4, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 4, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 4, "Gaussian");
 	
 	//Set Warnings
@@ -1407,7 +1481,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 		}
 	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv for
 	if (getResult("Spots", nResults - 4) < warning_spot) warnings += 1;
-	if (getResult("Bad Spots", nResults - 4) > warning_badspot) warnings += 4;
+	if (getResult("Filtered Spots", nResults - 4) > warning_badspot) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 4, warnings);
 	updateResults();
@@ -1421,6 +1495,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	
 	//Save Condensed Results
 	setResult("File", nResults, path);
+	setResult("Score", nResults - 1, score);
+	setResult("Bright Score", nResults - 1, score_bright);
 	setResult("Mean SNR", nResults - 1, signoimean);
 	setResult("Median SNR", nResults - 1, signoimedian);
 	setResult("Bright Median SNR", nResults - 1, signoimedian_bright);
@@ -1428,11 +1504,11 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Bright Signal", nResults - 1, sigrel_bright);
 	setResult("Noise", nResults - 1, noirel);
 	setResult("Spots", nResults - 1, spot_count);
-	setResult("Bad Spots", nResults - 1, bad_spots);
+	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
@@ -1449,31 +1525,34 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	//REGULAR SPOTS
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
-	signoimedian = (getResult("Median", nResults - 3) - getResult("Median", nResults - 1)) / (getResult("Median", nResults - 2) - getResult("Median", nResults - 1)); //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
+	score = signoimedian * sigrel/100;
 	
 	//BRIGHT SPOTS
 	signoimedian_bright = 0;
 	sigrel_bright = 0;
 	noirel_bright = 0;
+	score_bright = 0;
 	
 	//Set results
 
 	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
 	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
 	setResult("Coefficient of Variation", nResults - 3, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Regular Signal CV
+	setResult("Score", nResults - 3, score);
 	setResult("Mean SNR", nResults - 3, signoimean);
 	setResult("Median SNR", nResults - 3, signoimedian);
 	setResult("Signal", nResults - 3, sigrel);
 	setResult("Noise", nResults - 3, noirel);
 	setResult("Spots", nResults - 3, spot_count);
-	setResult("Bad Spots", nResults - 3, bad_spots);
+	setResult("Filtered Spots", nResults - 3, filtered_spots);
 	setResult("Maxima", nResults - 3, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
@@ -1493,7 +1572,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 		}
 	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv
 	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
-	if (getResult("Bad Spots", nResults - 3) > warning_badspot) warnings += 4;
+	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 4;
 	if (maxima_start == maxima) warnings += 2;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
@@ -1507,6 +1586,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	
 	//Save Condensed Results
 	setResult("File", nResults, path);
+	setResult("Score", nResults - 1, score);
+	setResult("Bright Score", nResults - 1, score_bright);
 	setResult("Mean SNR", nResults - 1, signoimean);
 	setResult("Median SNR", nResults - 1, signoimedian);
 	setResult("Bright Median SNR", nResults - 1, signoimedian_bright);
@@ -1514,11 +1595,11 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Bright Signal", nResults - 1, sigrel_bright);
 	setResult("Noise", nResults - 1, noirel);
 	setResult("Spots", nResults - 1, spot_count);
-	setResult("Bad Spots", nResults - 1, bad_spots);
+	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + bad_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
