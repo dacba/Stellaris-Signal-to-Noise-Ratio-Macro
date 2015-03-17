@@ -1,3 +1,4 @@
+
 macro "Calculate Signal to Noise Ratio v0.4.2...[c]" {
 version = "0.4.2";
 /*
@@ -31,7 +32,7 @@ run("Close All");
 
 if (indexOf(getVersion(), "1.49n") > -1) {
 	Dialog.create("Incompatible ImageJ Version");
-	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatible with this macro.\n \nDowngrade to 1.49m or upgrade to 1.49o by going to \"Help\" > \"Update ImageJ\" and then\nselecting \"Previous\" at the bottom of the drop down menu, or \"1.49o\" to upgrade.");
+	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatible with this macro.\n \nUpgrade your ImageJ version by going to \"Help\" > \"Update ImageJ\".");
 	Dialog.addCheckbox("I want to do it anyway", false);
 	Dialog.show();
 	temp = Dialog.getCheckbox();
@@ -60,7 +61,7 @@ count_bad = true;
 warning_cvspot = 0.5;
 warning_cvnoise = 0.25;
 warning_spot = 100;
-warning_badspot = 20;
+warning_badspot = 30;
 warning_disable = false;
 exclude = "NULL";
 low_user = 2;
@@ -123,7 +124,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
 	Dialog.addSlider("Suspicious Spot Count", 0, 200, warning_spot);
-	Dialog.addSlider("Bad Spot Count", 0, 50, warning_badspot);
+	Dialog.addSlider("Filtered Spot Count", 0, 50, warning_badspot);
 	Dialog.show();
 	
 	output = Dialog.getString();
@@ -171,7 +172,7 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 //Create Directories
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 if (filter == true) output_name += "-filtered-" + low_user + "-" + high_user;
-if (user_area == true) output_name += "-selection-" + toHex(round(random*random*random*100000000));
+if (user_area == true) output_name += "-selection_" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
 dir = getDirectory("Choose Directory containing .nd2 files"); //Get directory
 outDir = dir + output + "\\"; //Create base output directory
@@ -228,8 +229,8 @@ function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list 
 	n = 0;
-	for (i=0;i<list.length; i++){ //for each file
-		showProgress(1/list.length-1);
+	for (i = 0;i < list.length; i++){ //for each file
+		showProgress(1 / list.length - 1);
 		path = sub + list[i];
 		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) {
 			//File.makeDirectory(outDir + path); //Recreate file system in output folder
@@ -261,11 +262,11 @@ function SNR_main(dir, sub) {
 				selectImage(window_MaxIP);
 				run("Enhance Contrast", "saturated=0.01");
 				setBatchMode('show');
-				user_area_rev = getBoolean("Press \"Yes\" to analyze all but your selection\nPress \"No\" to analyze only your selection");
+				user_area_rev = getBoolean("Click \"Yes\" to analyze all but your selection\nPress \"No\" to analyze only your selection\n \Click \"Yes\" and make no selection to analyze the entire image");
 				setTool("freehand");
-				waitForUser("Press \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
+				waitForUser("Click \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
 				setBatchMode('hide');
-				if (selectionType() >= 0 && selectionType() < 4) {
+				if ((selectionType() >= 0 && selectionType() < 4) || selectionType == 9) {
 					if (user_area_rev == true) run("Make Inverse");
 					roiManager("Add");
 					}
@@ -520,7 +521,7 @@ function SNR_main(dir, sub) {
 				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
 				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
 				
-				selectImage(window_reg_signal);
+				selectImage(window_reg_signal); 
 				run("Create Selection");
 				roiManager("Add");
 				run("Make Inverse");
@@ -577,7 +578,7 @@ function SNR_main(dir, sub) {
 				setResult("Description", nResults - 1, "Background");
 				updateResults();
 				}
-			else {
+			else { //If filter == false
 				//Create Selection of signal
 				print(nResults + " points processed");
 				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
@@ -709,6 +710,7 @@ function SNR_background() { //Measures background, the darkest part, where there
 	roiManager("Select", 0);
 	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
 	run("Create Selection");
+	run("Enlarge...", "enlarge=1 pixel");
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results
 	} //End of Function
@@ -1351,7 +1353,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * sigrel/100;
+	score = signoimedian * (sigrel-noirel)/100;
 	
 	//Set results
 	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
@@ -1432,7 +1434,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
-	score = signoimedian * sigrel/100;
+	score = signoimedian * (sigrel-noirel)/100;
 	
 	//BRIGHT SPOTS
 	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -1529,7 +1531,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * sigrel/100;
+	score = signoimedian * (sigrel-noirel)/100;
 	
 	//BRIGHT SPOTS
 	signoimedian_bright = 0;
