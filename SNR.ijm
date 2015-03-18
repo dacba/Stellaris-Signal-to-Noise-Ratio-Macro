@@ -49,9 +49,9 @@ tolerance_maxima = 5;
 sum_intensity = false;
 peak_intensity = false;
 plot = false;
-filter = true;
+filter = false;
 user_area = false;
-rsquare = true;
+rsquare = false;
 user_area_rev = false;
 //Advanced Options
 advanced = false;
@@ -368,7 +368,7 @@ function SNR_main(dir, sub) {
 						}
 					} //End of dots loop
 				}
-			else if (x_values.length > 3000 && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
+			else if (x_values.length > 5000 && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
 				reduced_cardinal = true;
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
@@ -384,7 +384,7 @@ function SNR_main(dir, sub) {
 						}
 					} //End of dots loop
 				}
-			else { //Force polygon or if running on normal and less than 3000
+			else { //Force polygon or if running on normal and less than 5000
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
@@ -1368,8 +1368,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Filtered Spots", nResults - 3, filtered_spots);
 	setResult("Maxima", nResults - 3, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
@@ -1412,8 +1412,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
@@ -1441,7 +1441,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
-	score_bright = signoimedian_bright * sigrel_bright/100;
+	score_bright = signoimedian_bright * (sigrel_bright-noirel_bright)/100;
 	
 	//Set results
 
@@ -1462,8 +1462,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Filtered Spots", nResults - 4, filtered_spots);
 	setResult("Maxima", nResults - 4, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 4, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 4, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 4, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 4, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 4, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 4, "Gaussian");
 	
 	//Set Warnings
@@ -1509,8 +1509,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
@@ -1553,8 +1553,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Filtered Spots", nResults - 3, filtered_spots);
 	setResult("Maxima", nResults - 3, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
@@ -1600,8 +1600,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 3000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 3000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
