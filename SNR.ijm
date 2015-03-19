@@ -1,17 +1,20 @@
 
-macro "Calculate Signal to Noise Ratio v0.4.2...[c]" {
-version = "0.4.2";
+macro "Calculate Signal to Noise Ratio v0.4.3...[c]" {
+version = "0.4.3";
 /*
-2015-3-13
+2015-3-18
 Version 0.4.2 - for in-house use only, do not distribute
+Written by Trevor Okamoto, Stellaris Research Associate, for Biosearch Technologies, Inc.
 
+ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
+Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative singal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
 This macro opens a directory and does an analysis of spots
 Based off of "TrevorsMeasure" or "Measure Dots..."
 Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
 Use the Default threshold to determine cell noise and background values
 
 In regards to Significant Figures
-	All pixels are treated as exact numbers, results are capped to three decimal places, however the limiting sigfig is 10 (from sqrt2 multiplication in polygon program)
+	All pixels are treated as exact numbers, results are capped to three decimal places, however the limiting sigfig is 10
 
 Tested on ImageJ version 1.49o, 1.48v
 !!!1.49n does not work as intended!!!
@@ -79,7 +82,7 @@ Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_u
 Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
-Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Linear Fit Maxima Search", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options"), newArray(sum_intensity, peak_intensity, rsquare, plot, user_area, filter, advanced));
+Dialog.addCheckboxGroup(2, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced));
 Dialog.show();
 
 //Retrieve Choices
@@ -90,7 +93,6 @@ tolerance_maxima = Dialog.getNumber();
 expansion_method = Dialog.getChoice();
 sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
-rsquare = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
 user_area = Dialog.getCheckbox();
 filter = Dialog.getCheckbox();
@@ -99,15 +101,13 @@ maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 5 || tolerance_maxima < 2 || maxima > 50) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 10 || tolerance_maxima < 2 || maxima > 50) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 2 - 5  (" + tolerance_maxima + ")");
+	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
-
-if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\"");
 
 if (advanced == true) { //Advanced Options Dialog
 	waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
@@ -119,7 +119,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
 	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
 	Dialog.addSlider("MADe Top", 1, 5, high_user);
-	Dialog.addCheckboxGroup(2, 2, newArray("Include Large Spots", "Disable Warning Codes"), newArray(count_bad, warning_disable));
+	Dialog.addCheckboxGroup(2, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)"), newArray(count_bad, warning_disable, rsquare));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -137,12 +137,15 @@ if (advanced == true) { //Advanced Options Dialog
 	high_user = Dialog.getNumber();
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
+	rsquare = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
 	warning_badspot = Dialog.getNumber();
 	}
 
+if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\"");
+	
 //Open Tables
 run("Table...", "name=SNR width=400 height=200");
 if (peak_intensity == true) run("Table...", "name=Peak width=400 height=200");
@@ -1327,7 +1330,7 @@ function SNR_linearize(xvalues, yvalues) { //Returns an array with locations of 
 			Fit.doFit(0, temp_x, temp_y);
 			p += 1;
 			} while (Fit.rSquared > tolerance_maxima && p < xvalues.length - 1);
-		Fit.plot;
+		//Fit.plot;
 		//setBatchMode('show'); //Debug
 		segments = Array.concat(segments, p-2);
 		p = segments[segments.length - 1] + 2;
