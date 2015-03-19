@@ -3,8 +3,8 @@ macro "Calculate Signal to Noise Ratio v0.4.3...[c]" {
 version = "0.4.3";
 /*
 2015-3-18
-Version 0.4.2 - for in-house use only, do not distribute
-Written by Trevor Okamoto, Stellaris Research Associate, for Biosearch Technologies, Inc.
+For in-house use only, do not distribute
+Written by Trevor Okamoto, Research Associate, Stellaris. Biosearch Technologies, Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
 Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative singal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
@@ -58,6 +58,7 @@ rsquare = false;
 user_area_rev = false;
 //Advanced Options
 advanced = false;
+delay = 0;
 output = "Out-SNRatio";
 objective = 60;
 count_bad = true;
@@ -67,7 +68,7 @@ warning_spot = 100;
 warning_badspot = 30;
 warning_disable = false;
 exclude = "NULL";
-low_user = 2;
+low_user = 2.5;
 high_user = 4;
 gauss_offset = 2; //Limit for standard deviation
 gauss_d = 2; //Number of standard deviations to move outward
@@ -110,7 +111,7 @@ if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0
 	}
 
 if (advanced == true) { //Advanced Options Dialog
-	waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
+	//waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
 	
 	Dialog.create("Advanced Options");
 	Dialog.addString("Output Folder Name:", output);
@@ -119,6 +120,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
 	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
 	Dialog.addSlider("MADe Top", 1, 5, high_user);
+	Dialog.addSlider("Network Delay", 0, 10, delay);
 	Dialog.addCheckboxGroup(2, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)"), newArray(count_bad, warning_disable, rsquare));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
@@ -135,6 +137,7 @@ if (advanced == true) { //Advanced Options Dialog
 	tolerance_drop = Dialog.getNumber();
 	low_user = Dialog.getNumber();
 	high_user = Dialog.getNumber();
+	delay = Dialog.getNumber();
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	rsquare = Dialog.getCheckbox();
@@ -186,6 +189,7 @@ if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots direc
 
 
 //RUN IT!
+start_time = getTime();
 SNR_main(dir, ""); 
 
 
@@ -415,7 +419,7 @@ function SNR_main(dir, sub) {
 			northwest_high = newArray();
 			mean_intensity_high = newArray();
 			
-			if (filter == true) {
+			if (filter == true) { //Filter spots based on MADe settings
 				selectImage(window_signal);
 				close();
 				mean_intensity = newArray();
@@ -581,7 +585,7 @@ function SNR_main(dir, sub) {
 				setResult("Description", nResults - 1, "Background");
 				updateResults();
 				}
-			else { //If filter == false
+			else { //Do not filter spots
 				//Create Selection of signal
 				print(nResults + " points processed");
 				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
@@ -702,7 +706,23 @@ function SNR_main(dir, sub) {
 			run("Close All");
 			roiManager("Deselect");
 			roiManager("Delete");
-				
+			
+			wait(delay*1000); //Delay for network
+			
+			remaining = list.length - i;
+			estimate = round(((getTime() - start_time) * remaining / (list.length - remaining)) / 1000);
+			if (sub == "") folder = "Root";
+			else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
+			if (estimate >= 60) {
+				if (estimate/60 >= 60) {
+					if (estimate/3600 >= 24) {
+						print(folder + " Folder Time Remaining: " + floor(estimate/86400) + " days " + floor(estimate%86400/24) + " hours " + round(estimate%3600/60) + " min");
+						}
+					else print(folder + " Folder Time Remaining: " + floor(estimate/3600) + " hours " + round(estimate%3600/60) + " min");
+					}
+				else print(folder + " Folder Time Remaining: " + round(estimate/60) + " min");
+				}
+			else print(folder + " Folder Time Remaining: <1 min");
 			}} //end of else
 		}//end of for loop
 	}//end of function
