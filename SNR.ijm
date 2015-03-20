@@ -1,8 +1,8 @@
 
-macro "Calculate Signal to Noise Ratio v0.4.3...[c]" {
-version = "0.4.3";
+macro "Calculate Signal to Noise Ratio v0.4.4...[c]" {
+version = "0.4.4";
 /*
-2015-3-18
+2015-3-19
 For in-house use only, do not distribute
 Written by Trevor Okamoto, Research Associate, Stellaris. Biosearch Technologies, Inc.
 
