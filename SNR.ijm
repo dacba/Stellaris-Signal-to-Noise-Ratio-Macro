@@ -189,7 +189,7 @@ if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots direc
 
 
 //RUN IT!
-start_time = getTime();
+total_start = getTime();
 SNR_main(dir, ""); 
 
 
@@ -231,10 +231,20 @@ else { //Save as Measurement csv file if running other
 		}
 	}
 
+total_time = newArray();
+total_time = SNR_timediff(total_start, getTime()); //Get total_time array for days, hours, and minutes difference
+natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
+print(natural_time);
+
+
+print("-- Done --");
+showStatus("Finished.");
+}//end of macro
 
 function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
-	list = getFileList(dir + sub);//get file list 
+	list = getFileList(dir + sub);//get file list
+	start_time = getTime();
 	n = 0;
 	for (i = 0;i < list.length; i++){ //for each file
 		showProgress(1 / list.length - 1);
@@ -710,22 +720,17 @@ function SNR_main(dir, sub) {
 			wait(delay*1000); //Delay for network
 			
 			remaining = list.length - i;
-			estimate = round(((getTime() - start_time) * remaining / (list.length - remaining)) / 1000);
-			if (sub == "") folder = "Root";
-			else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
-			if (estimate >= 60) {
-				if (estimate/60 >= 60) {
-					if (estimate/3600 >= 24) {
-						print(folder + " Folder Time Remaining: " + floor(estimate/86400) + " days " + floor(estimate%86400/24) + " hours " + round(estimate%3600/60) + " min");
-						}
-					else print(folder + " Folder Time Remaining: " + floor(estimate/3600) + " hours " + round(estimate%3600/60) + " min");
-					}
-				else print(folder + " Folder Time Remaining: " + round(estimate/60) + " min");
+			estimate = round((getTime() - start_time) * remaining / (list.length - remaining));
+			if (estimate < 259200000) {
+				estimate_array = SNR_timediff(0, estimate);
+				if (sub == "") folder = "\"Root\"";
+				else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
+				print(SNR_natural_time(folder + " Folder Time Remaining: ", estimate_array));
 				}
-			else print(folder + " Folder Time Remaining: <1 min");
 			}} //end of else
 		}//end of for loop
-	}//end of function
+	
+	}//end of main function
 
 function SNR_background() { //Measures background, the darkest part, where there are no cells
 	selectImage(window_Median);
@@ -1637,6 +1642,41 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright);
 	}
 
-print("-- Done --");
-showStatus("Finished.");
-}//end of macro
+function SNR_timediff(start, end) { //Returns an array containing the difference between the start and end times in (days, hours, minutes)
+	time = newArray(0, 0, 0);
+	seconds = abs(round((end - start) / 1000));
+	if (seconds >= 60) { //If longer than a minute
+		if (seconds/60 >= 60) { //If longer than an hour
+			if (seconds/3600 >= 24) { //If longer than a day
+				time = newArray(floor(seconds/86400), floor(seconds%86400/3600), round(seconds%3600/60));
+				}
+			else time = newArray(0, floor(seconds/3600), round(seconds%3600/60)); //Hours and minutes
+			}
+		else time = newArray(0, 0, round(seconds/60)); //Just minutes
+		}
+	//Return (0, 0, 0) if less than a minute
+	return time;
+	}
+
+function SNR_natural_time(prefix, time) { //Accepts a prefix and a time array of (days, hours, minutes)
+	temp = prefix;
+	and = false;
+	if (time[0] == 0 && time[1] == 0 && time[2] == 0) return prefix + " <1 minute"; //Easy case
+	if (time[0] > 0) { //If days
+		if (time[0] == 1) temp += "1 day ";
+		else temp += toString(time[0]) + " days ";
+		and = true;
+		}
+	if (time[0] > 0 && time[1] > 0 && time[2] == 0) temp += "and "; //If only days and hours
+	if (time[1] > 0) { //If hours
+		if (time[1] == 1) temp += "1 hour ";
+		else temp += toString(time[1]) + " hours ";
+		and = true;
+		}
+	if ((time[0] > 0 || time[1] > 0) && time[2] > 0) temp += "and "; //If days or hours and minutes 
+	if (time[2] > 0) {
+		temp += toString(time[2]) + " minute";
+		if (time[2] > 1) temp += "s";
+		}
+	return temp;
+	}
