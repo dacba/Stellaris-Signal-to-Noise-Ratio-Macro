@@ -1,8 +1,8 @@
 
-macro "Calculate Signal to Noise Ratio v0.4.4...[c]" {
-version = "0.4.4";
+macro "Calculate Signal to Noise Ratio v0.4.5...[c]" {
+version = "0.4.5";
 /*
-2015-3-19
+2015-3-20
 For in-house use only, do not distribute
 Written by Trevor Okamoto, Research Associate, Stellaris. Biosearch Technologies, Inc.
 
@@ -44,6 +44,7 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 
 
 //Default Variables
+tif_ready = true;
 tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
 tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
@@ -156,7 +157,7 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Write table headers
-table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method;
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method; //-----Add maxima search method-----
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
@@ -180,17 +181,36 @@ output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + t
 if (filter == true) output_name += "-filtered-" + low_user + "-" + high_user;
 if (user_area == true) output_name += "-selection_" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
-dir = getDirectory("Choose Directory containing .nd2 files"); //Get directory
-outDir = dir + output + "\\"; //Create base output directory
-File.makeDirectory(outDir); //Create base output directory
-outDir = outDir + output_name + "\\";//Create specific output directory
-File.makeDirectory(outDir); //Create specific output directory
-if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots directory
+inDir = getDirectory("Choose Directory containing .nd2 files"); //Get inDirectory
+outDir = inDir + output + "\\"; //Create base output inDirectory
+File.makeDirectory(outDir); //Create base output inDirectory
+outDir = outDir + output_name + "\\";//Create specific output inDirectory
+File.makeDirectory(outDir); //Create specific output inDirectory
+if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots inDirectory
+tif_ready = File.exists(inDir + output + "\\Merged Images\\");
+if (tif_ready == false) { //Create Merged images folder if doesn't already exist
+	File.makeDirectory(inDir + output + "\\Merged Images\\");
+	File.makeDirectory(inDir + output + "\\Merged Images\\Max\\");
+	File.makeDirectory(inDir + output + "\\Merged Images\\Median\\");
+	}
+
+/*
+=====
+Change check for merged images to be within the main function instead of using tif_ready, that way if one is missing main will run normally
+=====
+*/
 
 
 //RUN IT!
 total_start = getTime();
-SNR_main(dir, ""); 
+if (tif_ready == false) {
+	print("First time running on this folder\nWill save merged images in .\\" + output + "\\Merged Images\\ for future use");
+	SNR_main(inDir, "");
+	}
+else {
+	print("Previous Merged images found");
+	SNR_main(inDir + output + "\\Merged Images\\Max\\", "");
+	}
 
 
 //Save it!
@@ -236,7 +256,6 @@ total_time = SNR_timediff(total_start, getTime()); //Get total_time array for da
 natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
 print(natural_time);
 
-
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
@@ -245,13 +264,26 @@ function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list
 	start_time = getTime();
-	n = 0;
 	for (i = 0;i < list.length; i++){ //for each file
 		showProgress(1 / list.length - 1);
 		path = sub + list[i];
+		window_MaxIP = 0;
 		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) {
 			//File.makeDirectory(outDir + path); //Recreate file system in output folder
 			SNR_main(dir, path); //Recursive Step
+			}
+		else if (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true) {
+			strip = substring(list[i], 0, indexOf(list[i], ".tif"));
+			stripath = replace(substring(path, 0, indexOf(path, ".tif")), "/", "_");
+			reduced_cardinal = false;
+			print("File: " + path);
+			//print(dir + list[i]); //Debug
+			open(dir + list[i]);
+			window_MaxIP = getImageID();
+			height = getHeight();
+			width = getWidth();
+			open(inDir + output + "\\Merged Images\\Median\\" + list[i]);
+			window_Median = getImageID();
 			}
 		else if (endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1) {
 			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
@@ -260,21 +292,25 @@ function SNR_main(dir, sub) {
 			info = getImageInfo();
 			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice
 			else {
-			//Initialize Image
-			reduced_cardinal = false;
-			print("File: " + path);
-			height = getHeight();
-			width = getWidth();
-			window_raw = getImageID();
-			run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
-			window_MaxIP = getImageID();
-			selectImage(window_raw);
-			run("Z Project...", "projection=Median"); //Max intensity merge
-			window_Median = getImageID();
-			run("Gaussian Blur...", "sigma=3");
-			selectImage(window_raw);
-			run("Close");
-			
+				//Initialize Image
+				reduced_cardinal = false;
+				print("File: " + path);
+				height = getHeight();
+				width = getWidth();
+				window_raw = getImageID();
+				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+				window_MaxIP = getImageID();
+				selectImage(window_raw);
+				run("Z Project...", "projection=Median"); //Max intensity merge
+				window_Median = getImageID();
+				run("Gaussian Blur...", "sigma=3");
+				selectImage(window_raw);
+				run("Close");
+				}
+			}
+		
+		//Analysis
+		if (window_MaxIP != 0) { 
 			if (user_area == true) {
 				selectImage(window_MaxIP);
 				run("Enhance Contrast", "saturated=0.01");
@@ -641,11 +677,14 @@ function SNR_main(dir, sub) {
 			resetThreshold();
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
+			//Save for future use
+			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Max\\" + strip + ".tif");
 			run("8-bit");
 			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[0] * array_results[1] / 100 + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[3] * array_results[4] / 100, 10, 40, 'white');
 			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[0] * array_results[1] / 100, 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
+			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Median\\" + strip + ".tif");
 			run("8-bit");
 			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
@@ -1401,11 +1440,12 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	
 	//Set Warnings
-	/*Warning Codes
-	1 = Low spot count (Suspicious)
-	2 = Starting Maxima is too high
-	4 = Lots of filtered spots
-	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	/*
+	Warning Codes
+	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	2 = Lots of filtered spots
+	4 = Low spot count (Suspicious)
+	8 = Signal is too low (Maxima is low)
 	*/
 	warnings = 0;
 	temp = 0;
@@ -1415,10 +1455,10 @@ function SNR_results() { //String Manipulation and Saves results to tables
 			temp = 1;
 			}
 		}
-	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv for
-	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
-	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 4;
-	if (maxima_start == maxima) warnings += 2;
+	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
+	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
+	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
+	if (maxima < 100) warnings += 8;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
 	
@@ -1496,10 +1536,10 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	
 	//Set Warnings
 	/*Warning Codes
-	1 = Low spot count (Suspicious)
-	2 = Maxima is too high
-	4 = Largely Bound Spots
-	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	2 = Lots of filtered spots
+	4 = Low spot count (Suspicious)
+	8 = Signal is too low (Maxima is low)
 	*/
 	warnings = 0;
 	temp = 0;
@@ -1509,10 +1549,10 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 			temp = 1;
 			}
 		}
-	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv for
-	if (getResult("Spots", nResults - 4) < warning_spot) warnings += 1;
-	if (getResult("Filtered Spots", nResults - 4) > warning_badspot) warnings += 4;
-	if (maxima_start == maxima) warnings += 2;
+	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
+	if (getResult("Spots", nResults - 4) < warning_spot) warnings += 4;
+	if (getResult("Filtered Spots", nResults - 4) > warning_badspot) warnings += 2;
+	if (maxima < 100) warnings += 8;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 4, warnings);
 	updateResults();
 	
@@ -1587,10 +1627,10 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	
 	//Set Warnings
 	/*Warning Codes
-	1 = Low spot count (Suspicious)
-	2 = Maxima is too high
-	4 = Largely Bound Spots
-	8 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	2 = Lots of filtered spots
+	4 = Low spot count (Suspicious)
+	8 = Signal is too low (Maxima is low)
 	*/
 	warnings = 0;
 	temp = 0;
@@ -1600,10 +1640,10 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 			temp = 1;
 			}
 		}
-	if (cv > warning_cvspot || temp == 1) warnings += 8; //Check cv
-	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 1;
-	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 4;
-	if (maxima_start == maxima) warnings += 2;
+	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
+	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
+	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
+	if (maxima < 100) warnings += 8;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
 	
