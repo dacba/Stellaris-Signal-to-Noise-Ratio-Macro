@@ -73,6 +73,7 @@ low_user = 2.5;
 high_user = 4;
 gauss_offset = 2; //Limit for standard deviation
 gauss_d = 2; //Number of standard deviations to move outward
+tif_ready = File.exists(inDir + output + "\\Merged Images\\");
 
 
 //Dialog
@@ -122,7 +123,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
 	Dialog.addSlider("MADe Top", 1, 5, high_user);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(2, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)"), newArray(count_bad, warning_disable, rsquare));
+	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental), Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, tif_ready));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -142,6 +143,7 @@ if (advanced == true) { //Advanced Options Dialog
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	rsquare = Dialog.getCheckbox();
+	tif_ready = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
@@ -801,13 +803,8 @@ function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, pos
 	selectImage(window_MaxIP);
 	roiManager("Select", newArray(0, roi));
 	roiManager("AND");
-	/*
-	selectImage(window_MaxIP);
-	setBatchMode('show');
-	waitForUser("test");
-	setBatchMode('hide');
-	*/
 	run("Measure");
+	//Check signal area is above threshold
 	run("Select None");
 	} //End of signal function
 
