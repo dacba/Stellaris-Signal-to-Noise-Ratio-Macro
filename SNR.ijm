@@ -1,8 +1,8 @@
 
-macro "Calculate Signal to Noise Ratio v0.4.5...[c]" {
-version = "0.4.5";
+macro "Calculate Signal to Noise Ratio v0.5...[c]" {
+version = "0.5";
 /*
-2015-3-20
+2015-3-23
 For in-house use only, do not distribute
 Written by Trevor Okamoto, Research Associate, Stellaris. Biosearch Technologies, Inc.
 
@@ -44,16 +44,17 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 
 
 //Default Variables
-tif_ready = true;
+tif_ready = false; 
+force_tif_ready = false;
 tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
-tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
+tolerance_upward = 0.5; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
 expansion_method = "Normal";
 tolerance_maxima = 5;
 sum_intensity = false;
 peak_intensity = false;
 plot = false;
-filter = false;
+filter = true;
 user_area = false;
 rsquare = false;
 user_area_rev = false;
@@ -62,7 +63,7 @@ advanced = false;
 delay = 0;
 output = "Out-SNRatio";
 objective = 60;
-count_bad = true;
+count_bad = false;
 warning_cvspot = 0.5;
 warning_cvnoise = 0.25;
 warning_spot = 100;
@@ -73,7 +74,7 @@ low_user = 2.5;
 high_user = 4;
 gauss_offset = 2; //Limit for standard deviation
 gauss_d = 2; //Number of standard deviations to move outward
-tif_ready = File.exists(inDir + output + "\\Merged Images\\");
+
 
 
 //Dialog
@@ -104,10 +105,10 @@ maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.5 || tolerance_maxima > 10 || tolerance_maxima < 2 || maxima > 50) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 10 || tolerance_maxima < 2 || maxima > 50) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 1.0  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
+	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 0.8  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
@@ -123,7 +124,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
 	Dialog.addSlider("MADe Top", 1, 5, high_user);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental), Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, tif_ready));
+	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, force_tif_ready));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -143,7 +144,7 @@ if (advanced == true) { //Advanced Options Dialog
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	rsquare = Dialog.getCheckbox();
-	tif_ready = Dialog.getCheckbox();
+	force_tif_ready = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
@@ -190,10 +191,12 @@ outDir = outDir + output_name + "\\";//Create specific output inDirectory
 File.makeDirectory(outDir); //Create specific output inDirectory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots inDirectory
 tif_ready = File.exists(inDir + output + "\\Merged Images\\");
+if (force_tif_ready == true) tif_ready == false;
 if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 	File.makeDirectory(inDir + output + "\\Merged Images\\");
 	File.makeDirectory(inDir + output + "\\Merged Images\\Max\\");
 	File.makeDirectory(inDir + output + "\\Merged Images\\Median\\");
+	File.makeDirectory(inDir + output + "\\Merged Images\\Subtract\\");
 	}
 
 /*
@@ -265,6 +268,11 @@ showStatus("Finished.");
 function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list
+	img_files = 0;
+	for (i = 0; i < list.length; i++) {
+		if ((endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1 && tif_ready == false) || (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true)) img_files++;
+		}
+	//print(img_files); //Debug
 	start_time = getTime();
 	for (i = 0;i < list.length; i++){ //for each file
 		showProgress(1 / list.length - 1);
@@ -286,6 +294,8 @@ function SNR_main(dir, sub) {
 			width = getWidth();
 			open(inDir + output + "\\Merged Images\\Median\\" + list[i]);
 			window_Median = getImageID();
+			open(inDir + output + "\\Merged Images\\Subtract\\" + list[i]);
+			window_Subtract = getImageID();
 			}
 		else if (endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1) {
 			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
@@ -302,6 +312,8 @@ function SNR_main(dir, sub) {
 				window_raw = getImageID();
 				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
 				window_MaxIP = getImageID();
+				run("Duplicate...", " ");
+				window_Subtract = getImageID();
 				selectImage(window_raw);
 				run("Z Project...", "projection=Median"); //Max intensity merge
 				window_Median = getImageID();
@@ -310,7 +322,6 @@ function SNR_main(dir, sub) {
 				run("Close");
 				}
 			}
-		
 		//Analysis
 		if (window_MaxIP != 0) { 
 			if (user_area == true) {
@@ -349,8 +360,10 @@ function SNR_main(dir, sub) {
 			
 			//Run peak intensity and Sum intensity measurments
 			if (peak_intensity == true) {
+				selectImage(window_Subtract);
 				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
+				selectImage(window_MaxIP);
 				run("Measure");
 				String.resetBuffer;
 				String.append(path);
@@ -359,6 +372,7 @@ function SNR_main(dir, sub) {
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
 			if (sum_intensity == true) {
+				selectImage(window_Subtract);
 				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				setResult("Sum Intensity", 0, 0);
@@ -375,6 +389,7 @@ function SNR_main(dir, sub) {
 				}
 			if (peak_intensity == false && sum_intensity == false) {
 				run("Clear Results");
+				selectImage(window_Subtract);
 				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
@@ -672,6 +687,10 @@ function SNR_main(dir, sub) {
 			else array_results = SNR_results(); //If not doing spot by spot
 			
 			//Prep Images
+			selectImage(window_Subtract);
+			run("Enhance Contrast", "saturated=0.01");
+			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Subtract\\" + strip + ".tif");
+			close();
 			selectImage(window_MaxIP);
 			run("Select None");
 			setThreshold(0, 10000);
@@ -682,8 +701,8 @@ function SNR_main(dir, sub) {
 			//Save for future use
 			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Max\\" + strip + ".tif");
 			run("8-bit");
-			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[0] * array_results[1] / 100 + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[3] * array_results[4] / 100, 10, 40, 'white');
-			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[0] * array_results[1] / 100, 10, 40, 'white');
+			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[5] + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[6], 10, 40, 'white');
+			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[3], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
 			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Median\\" + strip + ".tif");
@@ -760,14 +779,15 @@ function SNR_main(dir, sub) {
 			
 			wait(delay*1000); //Delay for network
 			
-			remaining = list.length - i;
-			estimate = round((getTime() - start_time) * remaining / (list.length - remaining));
+			remaining = img_files - i;
+			estimate = round((getTime() - start_time) * remaining / (img_files - remaining));
+			if (sub == "") folder = "\"Root\"";
+			else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
 			if (estimate < 259200000) {
 				estimate_array = SNR_timediff(0, estimate);
-				if (sub == "") folder = "\"Root\"";
-				else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
 				print(SNR_natural_time(folder + " Folder Time Remaining: ", estimate_array));
 				}
+			else print(folder + " Folder Time Remaining: Unknown");
 			}} //end of else
 		}//end of for loop
 	
@@ -791,7 +811,7 @@ function SNR_noise() { //Measures Cell Noise
 	setAutoThreshold("Default dark"); //Threshold cell noise
 	run("Create Selection"); //Create selection 2
 	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
-	run("Enlarge...", "enlarge=11 pixel"); //Expand Cell noise boundary; Needed for exceptional images
+	run("Enlarge...", "enlarge=16 pixel"); //Expand Cell noise boundary; Needed for exceptional images
 	roiManager("Add");
 	roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
 	roiManager("AND"); //Select regions of Cell Noise
@@ -803,6 +823,9 @@ function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, pos
 	selectImage(window_MaxIP);
 	roiManager("Select", newArray(0, roi));
 	roiManager("AND");
+	//setBatchMode('show');
+	//waitForUser("Check area");
+	//setBatchMode('hide');
 	run("Measure");
 	//Check signal area is above threshold
 	run("Select None");
@@ -815,7 +838,7 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	cap = 0;
 	
 	//North Point
-	for (r = 0; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++); //Get Relative brightness of brightest pixel
+	for (r = 1; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++); //Get Relative brightness of brightest pixel
 	pixel = newArray();
 	pixel_avg = 1;
 	//print(pixel.length, pixel_avg);
@@ -834,8 +857,7 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 		//print(pixel.length, pixel_avg);
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
-		else r-=2;
+		if (pixel.length < 3) r -=pixel.length;
 		}
 	cardinal[0] = r; 
 	if (r >= 5) cap ++;
@@ -858,8 +880,7 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
-		else r-=2;
+		if (pixel.length < 3) r -=pixel.length;
 		}
 	cardinal[1] = r;
 	if (r >= 5) cap ++;
@@ -882,8 +903,7 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
-		else r-=2;
+		if (pixel.length < 3) r -=pixel.length;
 		}
 	cardinal[2] = r; 
 	if (r >= 5) cap ++;
@@ -906,8 +926,7 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
-		else r-=2;
+		if (pixel.length < 3) r -=pixel.length;
 		}
 	cardinal[3] = r;
 	if (r >= 5) cap ++;
@@ -932,19 +951,18 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 	r = 0;
 	
 	//North point
-	//print("New Spot");
-	for (r = 0; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++); //Get Relative brightness of brightest pixel
+	for (r = 0; (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop && r < 8; r++); 
 	pixel = newArray();
 	pixel_avg = 1;
 	//print(pixel.length, pixel_avg);
 	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi, yi + r) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) { //Calculate the pixel_dif
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, don't do anything
 			}
 		if (pixel_dif.length >= 1) { //Get average of pixel_dif
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
@@ -952,110 +970,158 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 		//print(pixel.length, pixel_avg);
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
+		if (pixel.length < 3) r -=pixel.length;
 		else r-=2;
 		}
-	cardinal[0] = r; 
-	if (r >= 5) cap ++;
+	cardinal[0] = r;
+	if (r >= 8) cap ++;
 
 	//Northeast point
-	for (r = 0; (getPixel(xi + r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);; 
+	for (r = 0; (getPixel(xi + r + 1, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++); 
 	pixel = newArray();
 	pixel_avg = 1;
 	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi + r, yi + r) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi + r + 1, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
 			}
 		if (pixel_dif.length >= 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
+		if (pixel.length < 3) r -=pixel.length;
 		else r-=2;
 		}
 	cardinal[1] = r; 
-	if (r >= 5) cap ++;
+	if (r >= 6) cap ++;
 	
 	//East point
-	for (r = 0; (getPixel(xi + r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
+	for (r = 0; (getPixel(xi + r + 1, yi) - back_median)/bright > tolerance_drop && r < 8; r++);
 	pixel = newArray();
 	pixel_avg = 1;
 	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi + r, yi)); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi + r + 1, yi) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length >= 1) {
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
+		if (pixel.length < 3) r -=pixel.length;
 		else r-=2;
 		}
 	cardinal[2] = r;
-	if (r >= 5) cap ++;
+	if (r >= 8) cap ++;
 	
 	//Southeast point
-	for (r = 0; (getPixel(xi + r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);;
+	for (r = 0; (getPixel(xi + r + 1, yi + r + 1) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++);
 	pixel = newArray();
 	pixel_avg = 1;
 	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi + r, yi - r) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi + r + 1, yi + r + 1) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
 			}
 		if (pixel_dif.length >= 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
+		if (pixel.length < 3) r -=pixel.length;
 		else r-=2;
 		}
 	cardinal[3] = r;
-	if (r >= 5) cap ++;
+	if (r >= 6) cap ++;
 	
 	//South Point
-	for (r = 0; (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop && r < 8; r++);;
+	for (r = 0; (getPixel(xi, yi + r + 1) - back_median)/bright > tolerance_drop && r < 8; r++);
 	pixel = newArray();
 	pixel_avg = 1;
 	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi, yi - r) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi, yi + r + 1) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
 			}
 		if (pixel_dif.length >= 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
+		if (pixel.length < 3) r -=pixel.length;
 		else r-=2;
 		}
 	cardinal[4] = r; 
-	if (r >= 5) cap ++;
+	if (r >= 8) cap ++;
 	
 	//Southwest point
-	for (r = 0; (getPixel(xi - r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);;
+	for (r = 0; (getPixel(xi - r, yi + r + 1) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++);
+	pixel = newArray();
+	pixel_avg = 1;
+	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
+		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
+		pixel = Array.concat(pixel, getPixel(xi - r, yi + r + 1) - back_median); //Add new pixel to pixel array
+		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
+		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
+		for (p = 0; p < pixel_dif.length; p++) {
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
+			}
+		if (pixel_dif.length >= 1) { 
+			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
+			}
+		}
+	if (pixel.length > 0) {
+		if (pixel.length < 3) r -=pixel.length;
+		else r-=2;
+		}
+	cardinal[5] = r; 
+	if (r >= 6) cap ++;
+	
+	//West point
+	for (r = 0; (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
+	pixel = newArray();
+	pixel_avg = 1;
+	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
+		pixel = Array.concat(pixel, getPixel(xi - r, yi) - back_median); //Add new pixel to pixel array
+		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
+		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
+		for (p = 0; p < pixel_dif.length; p++) {
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
+			}
+		if (pixel_dif.length >= 1) { 
+			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
+			}
+		}
+	if (pixel.length > 0) {
+		if (pixel.length < 3) r -=pixel.length;
+		else r-=2;
+		}
+	cardinal[6] = r;
+	if (r >= 8) cap ++;
+	
+	//Northwest point
+	for (r = 0; (getPixel(xi - r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++);
 	pixel = newArray();
 	pixel_avg = 1;
 	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
@@ -1064,72 +1130,28 @@ function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions a
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			else pixel_dif[p] = pixel_dif[p]; //if the difference is positive, divide by upward tolerance
 			}
 		if (pixel_dif.length >= 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
-		else r-=2;
-		}
-	cardinal[5] = r; 
-	if (r >= 5) cap ++;
-	
-	//West point
-	for (r = 0; (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
-	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
-		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi - r, yi)); //Add new pixel to pixel array
-		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
-		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
-		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
-			}
-		if (pixel_dif.length >= 1) { 
-			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
-			}
-		}
-	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
-		else r-=2;
-		}
-	cardinal[6] = r;
-	if (r >= 5) cap ++;
-	
-	//Northwest point
-	for (r = 0; (getPixel(xi - r, yi + r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 8; r++);;
-	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
-		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi - r, yi + r) - back_median); //Add new pixel to pixel array
-		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
-		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
-		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //if the difference is negative, make it positive
-			else pixel_dif[p] = pixel_dif[p] / tolerance_upward; //if the difference is positive, divide by upward tolerance
-			}
-		if (pixel_dif.length >= 1) { 
-			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
-			}
-		}
-	if (pixel.length > 0) {
-		if (pixel.length < 3) r-=pixel.length;
+		if (pixel.length < 3) r -=pixel.length;
 		else r-=2;
 		}
 	cardinal[7] = r;
-	if (r >= 5) cap ++;
+	if (r >= 6) cap ++;
+	
+	//Array.print(cardinal);
+	xi++;
+	yi++;
 	
 	
 	if (cap <= 3 || count_bad == true) {
 		selectImage(window);
-		makePolygon(xi, yi + cardinal[0], xi + cardinal[1], yi + cardinal[1], xi + cardinal[2], yi, xi + cardinal[3], yi - cardinal[3], xi, yi - cardinal[4], xi - cardinal[5], yi - cardinal[5], xi - cardinal[6], yi, xi - cardinal[7], yi + cardinal[7]);
+		makePolygon(xi, yi - cardinal[0], xi + cardinal[1], yi - cardinal[1], xi + cardinal[2], yi, xi + cardinal[3], yi + cardinal[3], xi, yi + cardinal[4], xi - cardinal[5], yi + cardinal[5], xi - cardinal[6], yi, xi - cardinal[7], yi - cardinal[7]);
 		//exit();
 		fill();
 		return cardinal;
@@ -1272,6 +1294,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	slope_second_avg = 1;
 	run("Clear Results");
 	//Initialize Maxima Results
+	selectImage(window_Subtract);
 	roiManager("Select", 0);
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
@@ -1288,6 +1311,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	slope_second = newArray();
 	do { //Loop until the slope of the count levels out
 		//Get the next Spot Count
+		selectImage(window_Subtract);
 		roiManager("Select", 0);
 		run("Find Maxima...", "noise=" + maxima + " output=Count");
 		setResult("Maxima", nResults - 1, maxima);
@@ -1324,6 +1348,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	
 	if (plot == true) { //Create plots for maxima results
 		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
@@ -1351,6 +1376,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		}
 	if (rsquare == true) {
 		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
@@ -1417,7 +1443,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * (sigrel-noirel)/100;
+	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
 	//Set results
 	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
@@ -1488,7 +1514,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
 	
-	return newArray(signoimedian, sigrel, noirel);
+	return newArray(signoimedian, sigrel, noirel, score);
 	}
 
 function SNR_bright_results() { //String Manipulation and Saves results to tables for bright spots
@@ -1499,14 +1525,14 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
-	score = signoimedian * (sigrel-noirel)/100;
+	score = ((signoimedian * 3) * (sigrel-noirel))/400;
 	
 	//BRIGHT SPOTS
 	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
-	score_bright = signoimedian_bright * (sigrel_bright-noirel_bright)/100;
+	score_bright = ((signoimedian_bright * 3) * (sigrel_bright-noirel_bright))/400;
 	
 	//Set results
 
@@ -1585,7 +1611,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
 	
-	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright);
+	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright, score, score_bright);
 	}
 
 function SNR_bright_results_null() { //String Manipulation and Saves results to tables when no bright spots are found
@@ -1596,7 +1622,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * (sigrel-noirel)/100;
+	score = ((signoimedian * 3) * (sigrel-noirel))/400;
 	
 	//BRIGHT SPOTS
 	signoimedian_bright = 0;
@@ -1676,7 +1702,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	print("[Condense]", replace(String.buffer, "	", ", ")); //Print results to new table
 	run("Clear Results");
 	
-	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright);
+	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright, score, score_bright);
 	}
 
 function SNR_timediff(start, end) { //Returns an array containing the difference between the start and end times in (days, hours, minutes)
