@@ -1525,14 +1525,14 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
-	score = ((signoimedian * 3) * (sigrel-noirel))/400;
+	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
 	//BRIGHT SPOTS
 	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
-	score_bright = ((signoimedian_bright * 3) * (sigrel_bright-noirel_bright))/400;
+	score_bright = signoimedian_bright) * log((sigrel_bright-noirel_bright)/10)/log(10);
 	
 	//Set results
 
@@ -1622,7 +1622,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = ((signoimedian * 3) * (sigrel-noirel))/400;
+	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
 	//BRIGHT SPOTS
 	signoimedian_bright = 0;
