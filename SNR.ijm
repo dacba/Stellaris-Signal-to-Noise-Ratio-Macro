@@ -45,7 +45,7 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 
 //Default Variables
 tif_ready = false; 
-force_tif_ready = false;
+force_tif = false;
 tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
 tolerance_upward = 0.5; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20;
@@ -124,7 +124,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
 	Dialog.addSlider("MADe Top", 1, 5, high_user);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, force_tif_ready));
+	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, force_tif));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -145,7 +145,7 @@ if (advanced == true) { //Advanced Options Dialog
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	rsquare = Dialog.getCheckbox();
-	force_tif_ready = Dialog.getCheckbox();
+	force_tif = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
@@ -194,20 +194,13 @@ outDir = outDir + output_name + "\\";//Create specific output inDirectory
 File.makeDirectory(outDir); //Create specific output inDirectory
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots inDirectory
 tif_ready = File.exists(inDir + output + "\\Merged Images\\");
-if (force_tif_ready == true) tif_ready == false;
+if (force_tif == true) tif_ready == false;
 if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 	File.makeDirectory(inDir + output + "\\Merged Images\\");
 	File.makeDirectory(inDir + output + "\\Merged Images\\Max\\");
 	File.makeDirectory(inDir + output + "\\Merged Images\\Median\\");
 	File.makeDirectory(inDir + output + "\\Merged Images\\Subtract\\");
 	}
-
-/*
-=====
-Change check for merged images to be within the main function instead of using tif_ready, that way if one is missing main will run normally
-=====
-*/
-
 
 //RUN IT!
 total_start = getTime();
@@ -1439,7 +1432,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * sqrt(sigrel-noirel)/10;
+	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
 	//Set results
 	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
@@ -1521,14 +1514,14 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
-	score = signoimedian * sqrt(sigrel-noirel)/10;
+	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
 	//BRIGHT SPOTS
 	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
 	noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
-	score_bright = signoimedian_bright * sqrt(sigrel_bright-noirel_bright)/10;
+	score_bright = signoimedian_bright * log((sigrel_bright-noirel_bright)/10)/log(10);
 	
 	//Set results
 
@@ -1618,7 +1611,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * sqrt(sigrel-noirel)/10;
+	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
 	//BRIGHT SPOTS
 	signoimedian_bright = 0;
