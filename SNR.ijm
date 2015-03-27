@@ -1,17 +1,26 @@
 
-macro "Calculate Signal to Noise Ratio v0.5.1...[c]" {
-version = "0.5.1";
+macro "Calculate Signal to Noise Ratio v0.5.2...[c]" {
+version = "0.5.2";
 /*
-2015-3-24
-For in-house use only, do not distribute
-Written by Trevor Okamoto, Research Associate, Stellaris. Biosearch Technologies, Inc.
+Latest Version Date: 2015-3-27
+Written by Trevor Okamoto, Research Associate, R&D. Biosearch Technologies, Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
-Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative singal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
-This macro opens a directory and does an analysis of spots
-Based off of "TrevorsMeasure" or "Measure Dots..."
-Uses Find Maxima to find spots and expand the points to a selection used for spot analysis
-Use the Default threshold to determine cell noise and background values
+Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
+Copyright (C) 2014 Trevor Okamoto
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 In regards to Significant Figures
 	All pixels are treated as exact numbers, results are capped to three decimal places, however the limiting sigfig is 10
@@ -28,18 +37,27 @@ run("Set Measurements...", "area mean standard min median redirect=None decimal=
 run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 setFont("SansSerif", 22);
 print("\\Clear");
+roiManager("reset");
 run("Clear Results");
 run("Close All");
 
+if (indexOf(getInfo("os.name"), "Windows") == -1) {
+	Dialog.create("Incompatible Operating System");
+	Dialog.addMessage("This macro was developed for Windows.\nThis macro may not work as intended on other operating systems.");
+	Dialog.addCheckbox("I want to run this anyway, and accept the risks", false);
+	Dialog.show();
+	temp = Dialog.getCheckbox();
+	if (temp == false) exit();
+	}
 
 
 if (indexOf(getVersion(), "1.49n") > -1) {
 	Dialog.create("Incompatible ImageJ Version");
 	Dialog.addMessage("You are using ImageJ version 1.49n, which is incompatible with this macro.\n \nUpgrade your ImageJ version by going to \"Help\" > \"Update ImageJ\".");
-	Dialog.addCheckbox("I want to do it anyway", false);
+	Dialog.addCheckbox("I want to run this anyway", false);
 	Dialog.show();
 	temp = Dialog.getCheckbox();
-	if (temp == false) exit("Upgrade by going to \"Help\" > \"Update ImageJ\" and selecting \"Previous\"");
+	if (temp == false) exit("Upgrade by going to \"Help\" > \"Update ImageJ\"");
 	}
 
 
@@ -71,9 +89,13 @@ warning_badspot = 30;
 warning_disable = false;
 exclude = "NULL";
 low_user = 2;
-high_user = 5;
+high_user = 4;
+noise_stdev = 1;
 gauss_offset = 2; //Limit for standard deviation
 gauss_d = 2; //Number of standard deviations to move outward
+
+area_cutoff = 5;
+area_cutoff_bright = 5;
 
 
 
@@ -121,8 +143,9 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addString("Exclude Files and Folders:", exclude);
 	Dialog.addChoice("Objective Magnification", newArray(60, 100));
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
-	Dialog.addSlider("MADe Bottom", 1, 5, low_user);
-	Dialog.addSlider("MADe Top", 1, 5, high_user);
+	Dialog.addSlider("Dim StdDev", 1, 5, low_user);
+	Dialog.addSlider("Bright StdDev", 1, 5, high_user);
+	Dialog.addSlider("Signal/Noise StdDev Separation", 0, 5, noise_stdev);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
 	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, force_tif));
 	Dialog.addMessage("Warning Cutoffs");
@@ -141,6 +164,7 @@ if (advanced == true) { //Advanced Options Dialog
 	tolerance_drop = Dialog.getNumber();
 	low_user = Dialog.getNumber();
 	high_user = Dialog.getNumber();
+	noise_stdev = Dialog.getNumber();
 	delay = Dialog.getNumber();
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
@@ -184,8 +208,8 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
-if (filter == true) output_name += "-filtered-" + low_user + "-" + high_user;
-if (user_area == true) output_name += "-selection_" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
+if (filter == true) output_name += " Filtered_" + low_user + "-" + high_user + "-" + noise_stdev;
+if (user_area == true) output_name += " Selection_" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
 inDir = getDirectory("Choose Directory containing .nd2 files"); //Get inDirectory
 outDir = inDir + output + "\\"; //Create base output inDirectory
@@ -342,10 +366,19 @@ function SNR_main(dir, sub) {
 				run("Select All");
 				roiManager("Add");
 				}
-				
+			
 			//Get Median Background Level
 			SNR_background();
 			back_median = getResult("Median", nResults - 1);
+			run("Clear Results");
+			
+			//Get Signal threshold
+			SNR_noise();
+			roiManager("Deselect");
+			roiManager("Select", 1);
+			roiManager("Delete");
+			run("Select None");
+			noise_max = getResult("Mean", nResults - 1) + noise_stdev * getResult("StdDev", nResults - 1); //Signal must be brighter than the noise
 			run("Clear Results");
 			
 			//Determine Maxima
@@ -483,15 +516,19 @@ function SNR_main(dir, sub) {
 				selectImage(window_signal);
 				close();
 				mean_intensity = newArray();
+				peak_intensity = newArray();
+				area_all = newArray();
 				
 				//Iterate through every spot and get mean
 				selectImage(window_MaxIP);
 				for (q = 0; q < x_values.length; q++) {
 					run("Select None");
-					if (reduced_cardinal == false) makePolygon(x_values[q], y_values[q] + north[q], x_values[q] + northeast[q], y_values[q] + northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] - southeast[q], x_values[q], y_values[q] - south[q], x_values[q] - southwest[q], y_values[q] - southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] + northwest[q]);
-					else makeOval(x_values[q] - west[q], y_values[q] + north[q], east[q] + west[q], north[q] + south[q]);
+					if (reduced_cardinal == false) makePolygon(x_values[q], y_values[q] - north[q], x_values[q] + northeast[q], y_values[q] - northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] + southeast[q], x_values[q], y_values[q] + south[q], x_values[q] - southwest[q], y_values[q] + southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] - northwest[q]);
+					else makeOval(x_values[q] - west[q], y_values[q] - north[q], east[q] + west[q], north[q] + south[q]);
 					run("Measure");
 					mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
+					peak_intensity = Array.concat(peak_intensity, getPixel(x_values[q], y_values[q]));
+					area_all = Array.concat(area_all, getResult("Area", nResults - 1));
 					//print(getResult("Mean", nResults-1));
 					run("Clear Results");
 					}
@@ -532,9 +569,11 @@ function SNR_main(dir, sub) {
 				//print(low_cutoff, high_cutoff);
 				//print(temparr[0], temparr[temparr.length-1]);
 				
-				//Mask lowest
+				//Masking
+				area_reg = 0;
+				area_bright = 0;
 				for (q = 0; q < mean_intensity.length; q++) { //Select spots that should not be included in the regular measurement
-					if (mean_intensity[q] < low_cutoff) {
+					if (mean_intensity[q] < low_cutoff || peak_intensity[q] < noise_max) {
 						//print("Low " + mean_intensity[q] + " / " + low_cutoff);
 						low_counter = Array.concat(low_counter, q); //Mask for low cutoff
 						filtered_spots++;
@@ -544,6 +583,7 @@ function SNR_main(dir, sub) {
 						high_counter = Array.concat(low_counter, q); //Add to array that will exclude points
 						x_values_high = Array.concat(x_values_high, x_values[q]);
 						y_values_high = Array.concat(y_values_high, y_values[q]);
+						area_bright += area_all[q];
 						/*north_high = Array.concat(north_high, north[q]);
 						northeast_high = Array.concat(northeast_high, northeast[q]);
 						east_high = Array.concat(east_high, east[q]);
@@ -554,6 +594,7 @@ function SNR_main(dir, sub) {
 						northwest_high = Array.concat(northwest_high, northwest[q]);
 						mean_intensity_high = Array.concat(mean_intensity_high, mean_intensity[q]);*/
 						}
+					else area_reg += area_all[q];
 					//else print("Regular " + mean_intensity[q]);
 					}
 				
@@ -581,6 +622,9 @@ function SNR_main(dir, sub) {
 					for (p = 0; p < low_counter.length; p++) {
 						if (q == low_counter[p]) found = true;
 						}
+					for (p = 0; p < x_values_high.length; p++) {
+						if (x_values[q] == x_values_high[p] && y_values[q] == y_values_high[p]) found = true;
+						}
 					if (found == false) cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with new x and y values, screen out low and high signal
 					}
 				
@@ -588,22 +632,44 @@ function SNR_main(dir, sub) {
 				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
 				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
 				
-				selectImage(window_reg_signal); 
-				run("Create Selection");
-				roiManager("Add");
-				run("Make Inverse");
-				roiManager("Add");
-				selectImage(window_reg_signal);
-				close();
 				
-				if (x_values_high.length > 0) {
-					selectImage(window_high_signal);
+				if (area_reg > area_cutoff) {
+					selectImage(window_reg_signal); 
 					run("Create Selection");
 					roiManager("Add");
 					run("Make Inverse");
 					roiManager("Add");
-					selectImage(window_high_signal);
+					selectImage(window_reg_signal);
 					close();
+					}
+				else {
+					print("Too little/No Signal Detected, ignoring");
+					selectImage(window_reg_signal);
+					makeRectangle(0, 0, 2, 2);
+					roiManager("Add");
+					run("Make Inverse");
+					roiManager("Add");
+					filtered_spots = spot_count;
+					spot_count = 0;
+					close();
+					}
+				
+				if (x_values_high.length > 0) {
+					if (area_bright > area_cutoff_bright) {
+						selectImage(window_high_signal);
+						run("Create Selection");
+						roiManager("Add");
+						run("Make Inverse");
+						roiManager("Add");
+						selectImage(window_high_signal);
+						close();
+						}
+					else {
+						print("Bright spot area is too small, ignoring");
+						selectImage(window_high_signal);
+						close();
+						x_values_high = newArray();
+						}
 					}
 				else {
 					selectImage(window_high_signal);
@@ -633,8 +699,7 @@ function SNR_main(dir, sub) {
 					}
 				
 				//Run Noise
-				if (x_values_high.length > 0) SNR_noise(); //Give inverse of regular and high signal
-				else SNR_noise();
+				SNR_noise();
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Cell Noise");
 				updateResults();
@@ -687,12 +752,13 @@ function SNR_main(dir, sub) {
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
 			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Subtract\\" + strip + ".tif");
+			run("Select None");
 			close();
 			selectImage(window_MaxIP);
 			run("Select None");
-			setThreshold(0, 10000);
-			run("Create Selection");
 			resetThreshold();
+			setThreshold(0, 9000);
+			run("Create Selection");
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
 			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Max\\" + strip + ".tif"); //Save for future use
@@ -747,6 +813,7 @@ function SNR_main(dir, sub) {
 				fill();
 				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + filtered_spots, 10, 40, 'white');
 				}
+			run("Select None");
 			if (user_area == true) {
 				setForegroundColor(255, 255, 255);
 				if (user_area_rev == false) {
@@ -771,12 +838,10 @@ function SNR_main(dir, sub) {
 					}
 				run("Reverse");
 				}
-			
 			run("Select None");
 			saveAs("tif	", outDir + stripath + "_Merge.tif");
 			run("Close All");
-			roiManager("Deselect");
-			roiManager("Delete");
+			roiManager("Reset");
 			
 			wait(delay*1000); //Delay for network
 			
@@ -1426,6 +1491,8 @@ function SNR_length(segments) { //Returns an array with the lengths of the given
 	}
 
 function SNR_results() { //String Manipulation and Saves results to tables
+	warnings = 0;
+	
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	sigrel = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
@@ -1433,6 +1500,33 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
+	
+	if (getResult("Area", nResults - 3) < 1) {
+		sigrel = 0;
+		signoimean = 0;
+		signoimedian = 0;
+		score = 0;
+		warnings += 8;
+		}
+	
+	//Set Warnings
+	/*
+	Warning Codes
+	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	2 = Lots of filtered spots
+	4 = Low spot count (Suspicious)
+	8 = Signal area is too low
+	*/
+	temp = 0;
+	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
+		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
+			setResult("Warning Code", nResults - m, "High CV");
+			temp = 1;
+			}
+		}
+	if (cv > warning_cvspot || temp == 1) warnings += 1;
+	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
+	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
 	
 	//Set results
 	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
@@ -1450,29 +1544,11 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 3, "Polygon");
 	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
-	
-	//Set Warnings
-	/*
-	Warning Codes
-	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
-	2 = Lots of filtered spots
-	4 = Low spot count (Suspicious)
-	8 = Signal is too low (Maxima is low)
-	*/
-	warnings = 0;
-	temp = 0;
-	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
-		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
-			setResult("Warning Code", nResults - m, "High CV");
-			temp = 1;
-			}
-		}
-	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
-	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
-	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
-	if (maxima < 100) warnings += 8;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
+	
+	
+	
 	
 	//String manipulation and saving to SNR table
 	String.resetBuffer;
@@ -1507,6 +1583,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	}
 
 function SNR_bright_results() { //String Manipulation and Saves results to tables for bright spots
+	warnings = 0;
+	
 	//REGULAR SPOTS
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 4) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -1516,6 +1594,14 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
+	if (getResult("Area", nResults - 4) < 1) { //If the area is too small
+		sigrel = 0;
+		signoimean = 0;
+		signoimedian = 0;
+		score = 0;
+		warnings = 8;
+		}
+	
 	//BRIGHT SPOTS
 	signoimean_bright = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	sigrel_bright = getResult("Median", nResults - 3) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
@@ -1523,8 +1609,36 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	score_bright = signoimedian_bright * log((sigrel_bright-noirel_bright)/10)/log(10);
 	
+	if (getResult("Area", nResults - 3) < 1) { //if the area is too small
+		sigrel_bright = 0;
+		signoimean_bright = 0;
+		signoimedian_bright = 0;
+		score_bright = 0;
+		warnings = 8;
+		if (getResult("Area", nResults - 4) > 1) { //If only the bright is too small
+			
+			}
+		}
+	
+	//Set Warnings
+	/*Warning Codes
+	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	2 = Lots of filtered spots
+	4 = Low spot count (Suspicious)
+	8 = Signal is too low
+	*/
+	temp = 0;
+	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
+		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
+			setResult("Warning Code", nResults - m, "High CV");
+			temp = 1;
+			}
+		}
+	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
+	if (getResult("Filtered Spots", nResults - 4) > warning_badspot) warnings += 2;
+	if (getResult("Spots", nResults - 4) < warning_spot) warnings += 4;
+	
 	//Set results
-
 	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
 	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
 	setResult("Coefficient of Variation", nResults - 3, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Bright Signal CV
@@ -1545,28 +1659,10 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 4, "Polygon");
 	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 4, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 4, "Gaussian");
-	
-	//Set Warnings
-	/*Warning Codes
-	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
-	2 = Lots of filtered spots
-	4 = Low spot count (Suspicious)
-	8 = Signal is too low (Maxima is low)
-	*/
-	warnings = 0;
-	temp = 0;
-	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
-		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
-			setResult("Warning Code", nResults - m, "High CV");
-			temp = 1;
-			}
-		}
-	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
-	if (getResult("Spots", nResults - 4) < warning_spot) warnings += 4;
-	if (getResult("Filtered Spots", nResults - 4) > warning_badspot) warnings += 2;
-	if (maxima < 100) warnings += 8;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 4, warnings);
 	updateResults();
+	
+	
 	
 	//String manipulation and saving to SNR table
 	String.resetBuffer;
@@ -1604,6 +1700,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	}
 
 function SNR_bright_results_null() { //String Manipulation and Saves results to tables when no bright spots are found
+	warnings = 0;
+	
 	//REGULAR SPOTS
 	//Calculate signal to noise ratio and other values
 	signoimean = (getResult("Mean", nResults - 3) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -1613,14 +1711,39 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
+	if (getResult("Area", nResults - 3) < 1) {
+		sigrel = 0;
+		signoimean = 0;
+		signoimedian = 0;
+		score = 0;
+		warnings = 8;
+		}
+	
 	//BRIGHT SPOTS
 	signoimedian_bright = 0;
 	sigrel_bright = 0;
 	noirel_bright = 0;
 	score_bright = 0;
 	
+	//Set Warnings
+	/*Warning Codes
+	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
+	2 = Lots of filtered spots
+	4 = Low spot count (Suspicious)
+	8 = Signal is too low
+	*/
+	temp = 0;
+	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
+		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
+			setResult("Warning Code", nResults - m, "High CV");
+			temp = 1;
+			}
+		}
+	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
+	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
+	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
+	
 	//Set results
-
 	setResult("Coefficient of Variation", nResults - 1, getResult("StdDev", nResults - 1) / getResult("Mean", nResults - 1)); //Background CV
 	setResult("Coefficient of Variation", nResults - 2, getResult("StdDev", nResults - 2) / getResult("Mean", nResults - 2)); //Noise CV
 	setResult("Coefficient of Variation", nResults - 3, getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3)); //Regular Signal CV
@@ -1636,28 +1759,10 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 3, "Polygon");
 	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
-	
-	//Set Warnings
-	/*Warning Codes
-	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
-	2 = Lots of filtered spots
-	4 = Low spot count (Suspicious)
-	8 = Signal is too low (Maxima is low)
-	*/
-	warnings = 0;
-	temp = 0;
-	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
-		if (getResult("Coefficient of Variation", nResults - m) > warning_cvnoise && warning_disable == false) {
-			setResult("Warning Code", nResults - m, "High CV");
-			temp = 1;
-			}
-		}
-	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
-	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
-	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
-	if (maxima < 100) warnings += 8;
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
+	
+	
 	
 	//String manipulation and saving to SNR table
 	String.resetBuffer;
