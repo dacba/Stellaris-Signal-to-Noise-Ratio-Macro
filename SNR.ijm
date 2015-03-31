@@ -303,7 +303,7 @@ function SNR_main(dir, sub) {
 			SNR_main(dir, path); //Recursive Step
 			}
 		else if (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true) {
-			strip = substring(list[i], 0, indexOf(list[i], ".tif"));
+			strip = substring(list[i], lastIndexOf(list[i], "_") + 1, indexOf(list[i], ".tif"));
 			stripath = replace(substring(path, 0, indexOf(path, ".tif")), "/", "_");
 			reduced_cardinal = false;
 			print("File: " + path);
@@ -326,7 +326,7 @@ function SNR_main(dir, sub) {
 			else {
 				//Initialize Image
 				reduced_cardinal = false;
-				print("File: " + path);
+				print(" \nFile: " + path);
 				height = getHeight();
 				width = getWidth();
 				window_raw = getImageID();
@@ -630,7 +630,7 @@ function SNR_main(dir, sub) {
 				
 				print(x_values.length-low_counter.length + " Regular points processed");
 				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
-				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
+				if (filtered_spots > 0) print(filtered_spots + " points filtered");
 				
 				
 				if (area_reg > area_cutoff) {
@@ -751,7 +751,7 @@ function SNR_main(dir, sub) {
 			//Prep Images
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
-			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Subtract\\" + strip + ".tif");
+			if (File.exists(inDir + output+ "\\Merged Images\\Subtract\\" + stripath + ".tif") == false) saveAs("tif", inDir + output+ "\\Merged Images\\Subtract\\" + stripath + ".tif");
 			run("Select None");
 			close();
 			selectImage(window_MaxIP);
@@ -761,7 +761,7 @@ function SNR_main(dir, sub) {
 			run("Create Selection");
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
-			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Max\\" + strip + ".tif"); //Save for future use
+			if (File.exists(inDir + output+ "\\Merged Images\\Max\\" + stripath + ".tif") == false) saveAs("tif", inDir + output+ "\\Merged Images\\Max\\" + stripath + ".tif"); //Save for future use
 			getMinAndMax(min, max); //Set max to x10 noise
 			setMinAndMax(min, min + array_results[2] * 10);
 			//print(min, max);
@@ -772,7 +772,7 @@ function SNR_main(dir, sub) {
 			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[3], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
-			if (tif_ready == false) saveAs("tif", inDir + output+ "\\Merged Images\\Median\\" + strip + ".tif");
+			if (File.exists(inDir + output+ "\\Merged Images\\Median\\" + stripath + ".tif") == false) saveAs("tif", inDir + output+ "\\Merged Images\\Median\\" + stripath + ".tif");
 			run("8-bit");
 			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
@@ -847,7 +847,7 @@ function SNR_main(dir, sub) {
 			
 			remaining = img_files - i;
 			estimate = round((getTime() - start_time) * remaining / (img_files - remaining));
-			if (sub == "") folder = "\"Root\"";
+			if (sub == "") folder = "Root";
 			else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
 			if (estimate < 259200000) {
 				estimate_array = SNR_timediff(0, estimate);
@@ -1338,6 +1338,23 @@ function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and
 		spot_count --;
 		filtered_spots ++;
 		return cardinal;
+		}
+	}
+
+function SNR_findmaxima(window, limit) { //Finds local Maxima and outputs the X and Y values on the results table, x pass and y pass
+	run("Clear Results");
+	selectImage(window);
+	height = getHeight();
+	width = getWidth();
+	for (y = 1; y < height - 1; y++) {
+		for (x = 1; x < width - 1; x++) {
+			if (getPixel(x, y) - ((getPixel(x-1, y)+getPixel(x+1, y))/2) > limit) {
+				if (getPixel(x, y) - ((getPixel(x, y-1)+getPixel(x, y+1))/2) > limit) {
+					setResult("X", nResults, x);
+					setResult("Y", nResults - 1, y);
+					}
+				}
+			}
 		}
 	}
 

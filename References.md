@@ -1,4 +1,7 @@
-References:
-==========
-#####Median Absolute Deviation...
-	Hoaglin, D.C., Mosteller, F., Turkey, J.W.: Understanding Robust and Exploratory Data Analysis, pp. 404-414. John Wiley & Sons. ISBN 0-471-09777-2
+#References:
+
+######Mutterer, J., Rasband, W. ImageJ Macro Language Programmer's Reference Guide v1.46d
+######Ober, R. J., Ram, S., & Ward, E. S. (2004). Localization Accuracy in Single-Molecule Microscopy. Biophysical Journal, 86(2), 1185–1200.
+
+##Acknowledgments:
+Pending
