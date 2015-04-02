@@ -1,6 +1,6 @@
 
-macro "Calculate Signal to Noise Ratio v0.5.2...[c]" {
-version = "0.5.2";
+macro "Calculate Signal to Noise Ratio v0.5.3...[c]" {
+version = "0.5.3";
 /*
 Latest Version Date: 2015-3-27
 Written by Trevor Okamoto, Research Associate, R&D. Biosearch Technologies, Inc.
@@ -62,40 +62,43 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 
 
 //Default Variables
-tif_ready = false; 
-force_tif = false;
+tif_ready = false; //Determines if pre-saved tif files are available
 tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
 tolerance_upward = 0.5; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
-maxima = 20;
-expansion_method = "Normal";
-tolerance_maxima = 5;
-sum_intensity = false;
-peak_intensity = false;
-plot = false;
-filter = true;
-user_area = false;
-rsquare = false;
-user_area_rev = false;
+maxima = 20; //Beginning Maxima value
+expansion_method = "Normal"; //Expansion Method
+normal_limit = 5000; //Will run ellipse when there are more than this number of spots
+tolerance_maxima = 5; //Tolerance for maxima
+sum_intensity = false; //Check to run sum intensity or not
+peak_intensity = false; //Check to run peak intensity
+plot = false; //Check to plot find maxima curve
+filter = true; //Check to filter spots
+user_area = false; //Check for user defined area
+user_area_rev = false; //Check if to invert selection
+
 //Advanced Options
 advanced = false;
-delay = 0;
-output = "Out-SNRatio";
-objective = 60;
-count_bad = false;
-warning_cvspot = 0.5;
-warning_cvnoise = 0.25;
-warning_spot = 100;
-warning_badspot = 30;
-warning_disable = false;
-exclude = "NULL";
-low_user = 2;
-high_user = 4;
-noise_stdev = 1;
-gauss_offset = 2; //Limit for standard deviation
-gauss_d = 2; //Number of standard deviations to move outward
+user_area_double_check = true; //Double checks with the user if 
+force_tif = false; //Forces re-saving tif files
+delay = 0; //Network delay
+rsquare = false; //Check for linear fit maxima search
+output = "Out-SNRatio"; //Output folder
+objective = 60; //Objective magnification
+count_bad = false; //Check to count large spots
+warning_cvspot = 0.5; //Warning cutoff for coefficient of variation signal
+warning_cvnoise = 0.25; //Warning cutoff for coefficient of variation noise
+warning_spot = 100; //Warning cutoff for spot number
+warning_badspot = 30; //Warning cutoff for filtered spot number
+warning_disable = false; //Disable warnings
+exclude = "NULL"; //Will exclude any file or folder containing this string
+filter_low = 2; //Defines the number of standard deviation points below the mean to filter signal
+filter_high = 5; //Defines the number of standard deviation points above the mean to separate signal
+noise_stdev = 3; //Defines the number of standard deviation points above the mean noise value for peak signal to be counted
+gauss_offset = 2; //Defines the threshold of standard deviation of the Gaussian fit
+gauss_d = 2; //Number of standard deviations to move outward of Gaussian fit
 
-area_cutoff = 5;
-area_cutoff_bright = 5;
+area_cutoff = 5; //Area (micron^2) the regular selection must be to be counted
+area_cutoff_bright = 5; //Area (micron^2) the bright selection must be to be counted
 
 
 
@@ -105,7 +108,6 @@ Dialog.create("Spot Processor");
 Dialog.addMessage("Please enter the Bounding Stringency, Upward Stringency and Maxima Tolerance");
 Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tolerance_bounding);
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
-Dialog.addSlider("Starting Maxima(Higher = faster):", 0, 200, maxima);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
 Dialog.addCheckboxGroup(2, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced));
@@ -114,7 +116,6 @@ Dialog.show();
 //Retrieve Choices
 tolerance_bounding = Dialog.getNumber();
 tolerance_upward = Dialog.getNumber();
-maxima = Dialog.getNumber();
 tolerance_maxima = Dialog.getNumber();
 expansion_method = Dialog.getChoice();
 sum_intensity = Dialog.getCheckbox();
@@ -127,10 +128,10 @@ maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 10 || tolerance_maxima < 2 || maxima > 50) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 10 || tolerance_maxima < 2) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 0.8  (" + tolerance_upward + ")\nStarting Maxima: 0 - 50  (" + maxima + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
+	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 0.8  (" + tolerance_upward + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
@@ -142,12 +143,15 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addString("Output Folder Name:", output);
 	Dialog.addString("Exclude Files and Folders:", exclude);
 	Dialog.addChoice("Objective Magnification", newArray(60, 100));
+	Dialog.addSlider("Starting Maxima:", 0, 200, maxima);
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
-	Dialog.addSlider("Dim StdDev", 1, 5, low_user);
-	Dialog.addSlider("Bright StdDev", 1, 5, high_user);
+	Dialog.addSlider("Dim StdDev", 1, 5, filter_low);
+	Dialog.addSlider("Bright StdDev", 1, 5, filter_high);
 	Dialog.addSlider("Signal/Noise StdDev Separation", 0, 5, noise_stdev);
+	Dialog.addSlider("Signal Area Cutoff", 0, 10, area_cutoff);
+	Dialog.addSlider("Bright Signal Area Cutoff", 0, 10, area_cutoff_bright);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images"), newArray(count_bad, warning_disable, rsquare, force_tif));
+	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check"), newArray(count_bad, warning_disable, rsquare, force_tif, user_area_double_check));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -161,24 +165,26 @@ if (advanced == true) { //Advanced Options Dialog
 	objective = Dialog.getChoice();
 	objective /= 60;
 	objective = 1 / objective;
+	maxima = Dialog.getNumber();
 	tolerance_drop = Dialog.getNumber();
-	low_user = Dialog.getNumber();
-	high_user = Dialog.getNumber();
+	filter_low = Dialog.getNumber();
+	filter_high = Dialog.getNumber();
 	noise_stdev = Dialog.getNumber();
 	delay = Dialog.getNumber();
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	rsquare = Dialog.getCheckbox();
 	force_tif = Dialog.getCheckbox();
+	user_area_double_check = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
 	warning_badspot = Dialog.getNumber();
 	}
 
-output = output + "V" + version;
+output = output + "V" + version; //Change output folder to include version number
 
-if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\"");
+if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\""); //Check for filtering and linear fit maxima search
 	
 //Open Tables
 run("Table...", "name=SNR width=400 height=200");
@@ -208,33 +214,36 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
-if (filter == true) output_name += " Filtered_" + low_user + "-" + high_user + "-" + noise_stdev;
-if (user_area == true) output_name += " Selection_" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
+if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
+if (user_area == true) output_name += " Selection-" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
 inDir = getDirectory("Choose Directory containing .nd2 files"); //Get inDirectory
 outDir = inDir + output + "\\"; //Create base output inDirectory
 File.makeDirectory(outDir); //Create base output inDirectory
 outDir = outDir + output_name + "\\";//Create specific output inDirectory
 File.makeDirectory(outDir); //Create specific output inDirectory
+mergeDir = inDir + "\\Out-Merged Images\\";
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots inDirectory
-tif_ready = File.exists(inDir + output + "\\Merged Images\\");
+tif_ready = File.exists(mergeDir + "\\log.txt");
 if (force_tif == true) tif_ready == false;
 if (tif_ready == false) { //Create Merged images folder if doesn't already exist
-	File.makeDirectory(inDir + output + "\\Merged Images\\");
-	File.makeDirectory(inDir + output + "\\Merged Images\\Max\\");
-	File.makeDirectory(inDir + output + "\\Merged Images\\Median\\");
-	File.makeDirectory(inDir + output + "\\Merged Images\\Subtract\\");
+	File.makeDirectory(mergeDir);
+	File.makeDirectory(mergeDir + "\\Max\\");
+	File.makeDirectory(mergeDir + "\\Median\\");
+	File.makeDirectory(mergeDir + "\\Subtract\\");
 	}
 
 //RUN IT!
 total_start = getTime();
-if (tif_ready == false) {
+if (File.exists(mergeDir + "\\log.txt")) File.append(output_name + " Started...", mergeDir + "\\log.txt");
+final_file_list = "";
+if (tif_ready == false) { //Point to nd2 files if no tif are available
 	print("First time running on this folder\nWill save merged images in .\\" + output + "\\Merged Images\\ for future use");
-	SNR_main(inDir, "");
+	final_file_list = SNR_main(inDir, "");
 	}
-else {
+else { //Point to tif 
 	print("Previous Merged images found");
-	SNR_main(inDir + output + "\\Merged Images\\Max\\", "");
+	final_file_list = SNR_main(mergeDir + "\\Max\\", "");
 	}
 
 
@@ -281,6 +290,12 @@ total_time = SNR_timediff(total_start, getTime()); //Get total_time array for da
 natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
 print(natural_time);
 
+if (File.exists(mergeDir + "\\log.txt") == false) {
+	File.saveString("The following files have been saved for future use:" + final_file_list + "\n", mergeDir + "\\log.txt");
+	File.append("\n" + output_name + " Started...", mergeDir + "\\log.txt");
+	}
+File.append("...Completed", mergeDir + "\\log.txt");
+
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
@@ -288,6 +303,7 @@ showStatus("Finished.");
 function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list
+	final_file_list = "";
 	img_files = 0;
 	for (i = 0; i < list.length; i++) {
 		if ((endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1 && tif_ready == false) || (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true)) img_files++;
@@ -298,35 +314,35 @@ function SNR_main(dir, sub) {
 		showProgress(1 / list.length - 1);
 		path = sub + list[i];
 		window_MaxIP = 0;
-		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) {
+		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) { //For Folders
 			//File.makeDirectory(outDir + path); //Recreate file system in output folder
 			SNR_main(dir, path); //Recursive Step
 			}
-		else if (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true) {
+		else if (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true) { //For tif files
 			strip = substring(list[i], lastIndexOf(list[i], "_") + 1, indexOf(list[i], ".tif"));
 			stripath = replace(substring(path, 0, indexOf(path, ".tif")), "/", "_");
 			reduced_cardinal = false;
-			print("File: " + path);
+			print("-----\nFile: " + path);
 			//print(dir + list[i]); //Debug
 			open(dir + list[i]);
 			window_MaxIP = getImageID();
 			height = getHeight();
 			width = getWidth();
-			open(inDir + output + "\\Merged Images\\Median\\" + list[i]);
+			open(mergeDir + "\\Median\\" + list[i]); //Open Median
 			window_Median = getImageID();
-			open(inDir + output + "\\Merged Images\\Subtract\\" + list[i]);
+			open(mergeDir + "\\Subtract\\" + list[i]); //Open subract background image
 			window_Subtract = getImageID();
 			}
-		else if (endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1) {
+		else if (endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1) { //For nd2 files
 			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
 			stripath = replace(substring(path, 0, indexOf(path, ".nd2")), "/", "_");
 			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
 			info = getImageInfo();
-			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice
+			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice nd2
 			else {
 				//Initialize Image
 				reduced_cardinal = false;
-				print(" \nFile: " + path);
+				print("-----\nFile: " + path);
 				height = getHeight();
 				width = getWidth();
 				window_raw = getImageID();
@@ -334,28 +350,57 @@ function SNR_main(dir, sub) {
 				window_MaxIP = getImageID();
 				run("Duplicate...", " ");
 				window_Subtract = getImageID();
-				run("Subtract Background...", "rolling=20");
+				run("Subtract Background...", "rolling=20"); //Subtract Background
 				selectImage(window_raw);
-				run("Z Project...", "projection=Median"); //Max intensity merge
+				run("Z Project...", "projection=Median"); //Median intensity merge
 				window_Median = getImageID();
-				run("Gaussian Blur...", "sigma=3");
+				run("Gaussian Blur...", "sigma=3"); //Blur Median
 				selectImage(window_raw);
 				run("Close");
 				}
 			}
 		//Analysis
-		if (window_MaxIP != 0) { 
-			if (user_area == true) {
+		if (window_MaxIP != 0) {
+			final_file_list += "\n" + list[i]; //Save file names
+			
+			//Get User Area Selection, if needed
+			if (user_area == true) { //For selecting areas
 				selectImage(window_MaxIP);
 				run("Enhance Contrast", "saturated=0.01");
 				setBatchMode('show');
-				user_area_rev = getBoolean("Click \"Yes\" to analyze all but your selection\nPress \"No\" to analyze only your selection\n \Click \"Yes\" and make no selection to analyze the entire image");
+				user_area_rev = getBoolean("Click \"Yes\" to analyze all but your selection\nPress \"No\" to analyze only your selection\n \Make no selection to analyze the entire image");
 				setTool("freehand");
-				waitForUser("Click \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
+				waitForUser("----------------======WAIT======----------------\n Click \"OK\" AFTER selecting area for analysis\n   Select nothing to analyze the entire image\n----------------======WAIT======----------------");
 				setBatchMode('hide');
-				if ((selectionType() >= 0 && selectionType() < 4) || selectionType == 9) {
+				if ((selectionType() >= 0 && selectionType() < 4) || selectionType == 9) { //If valid selection selection
 					if (user_area_rev == true) run("Make Inverse");
 					roiManager("Add");
+					}
+				else if (selectionType() == -1 && user_area_double_check == true) { //If no selection
+					user_area_double_check = false;
+					temp = getBoolean("Are you sure you want to analyze the whole image?");
+					if (temp == true) {
+						run("Select All");
+						roiManager("Add");
+						}
+					else {
+						selectImage(window_MaxIP);
+						run("Enhance Contrast", "saturated=0.01");
+						setBatchMode('show');
+						user_area_rev = getBoolean("Click \"Yes\" to analyze all but your selection\nPress \"No\" to analyze only your selection\n \Make no selection to analyze the entire image");
+						setTool("freehand");
+						waitForUser("Click \"OK\" after selecting area for analysis\nSelect nothing to analyze the entire image");
+						setBatchMode('hide');
+						if ((selectionType() >= 0 && selectionType() < 4) || selectionType == 9) { //If valid selection selection
+							if (user_area_rev == true) run("Make Inverse");
+							roiManager("Add");
+							}
+						else {
+							waitForUser("The whole image will be analyzed.\nNext time just say so in the first place.");
+							run("Select All");
+							roiManager("Add");
+							}
+						}
 					}
 				else {
 					run("Select All");
@@ -436,7 +481,7 @@ function SNR_main(dir, sub) {
 			x_values = newArray();
 			y_values = newArray();
 			cardinal = newArray();
-			if (filter == true) {
+			if (filter == true) { //Get bounds for filter array
 				north = newArray();
 				northeast = newArray();
 				east = newArray();
@@ -468,7 +513,7 @@ function SNR_main(dir, sub) {
 						}
 					} //End of dots loop
 				}
-			else if (x_values.length > 5000 && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
+			else if (x_values.length > normal_limit && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
 				reduced_cardinal = true;
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
@@ -484,7 +529,7 @@ function SNR_main(dir, sub) {
 						}
 					} //End of dots loop
 				}
-			else { //Force polygon or if running on normal and less than 5000
+			else { //Force polygon or if running on normal and less than normal_limit
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
@@ -526,10 +571,17 @@ function SNR_main(dir, sub) {
 					if (reduced_cardinal == false) makePolygon(x_values[q], y_values[q] - north[q], x_values[q] + northeast[q], y_values[q] - northeast[q], x_values[q] + east[q], y_values[q], x_values[q] + southeast[q], y_values[q] + southeast[q], x_values[q], y_values[q] + south[q], x_values[q] - southwest[q], y_values[q] + southwest[q], x_values[q] - west[q], y_values[q], x_values[q] - northwest[q], y_values[q] - northwest[q]);
 					else makeOval(x_values[q] - west[q], y_values[q] - north[q], east[q] + west[q], north[q] + south[q]);
 					run("Measure");
-					mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
-					peak_intensity = Array.concat(peak_intensity, getPixel(x_values[q], y_values[q]));
-					area_all = Array.concat(area_all, getResult("Area", nResults - 1));
-					//print(getResult("Mean", nResults-1));
+					if (nResults == 1) {
+						mean_intensity = Array.concat(mean_intensity, getResult("Mean", nResults - 1));
+						peak_intensity = Array.concat(peak_intensity, getPixel(x_values[q], y_values[q]));
+						area_all = Array.concat(area_all, getResult("Area", nResults - 1));
+						//print(getResult("Mean", nResults-1));
+						}
+					else {
+						mean_intensity = Array.concat(mean_intensity, 0);
+						peak_intensity = Array.concat(peak_intensity, 0);
+						area_all = Array.concat(area_all, 0);
+						}
 					run("Clear Results");
 					}
 				
@@ -540,28 +592,28 @@ function SNR_main(dir, sub) {
 				med = 0; //median of mean_intensity
 				madarr = newArray(); //median absolute deviation array
 				mad = 0;
-				if (temparr%2 == 0) { //If even
-					temp = temparr.length/2;
+				if (temparr.length%2 == 0) { //If even
+					temp = temparr.length/2 - 1;
 					med =(temparr[temp] + temparr[temp+1])/2;
 					}
 				else { //Odd
-					med = temparr[floor(temparr.length/2)+1];
+					med = temparr[floor(temparr.length/2)];
 					}
 				//Median Absolute Deviation
 				for (q = 0; q < mean_intensity.length; q++) {
 					madarr = Array.concat(madarr, abs(med - mean_intensity[q]));
 					}
 				Array.sort(madarr);
-				if (madarr%2 == 0) { //If even
-					temp = madarr.length/2;
+				if (madarr.length%2 == 0) { //If even
+					temp = madarr.length/2 - 1;
 					mad =(madarr[temp] + madarr[temp+1])/2;
 					}
-				else mad = madarr[floor(madarr.length/2)+1]; //If odd
+				else mad = madarr[floor(madarr.length/2)]; //If odd
 				
 				made = mad * 1.483;
 				
-				low_cutoff = med - (made * low_user);
-				high_cutoff = med + (made * high_user);
+				low_cutoff = med - (made * filter_low);
+				high_cutoff = med + (made * filter_high);
 				
 				low_counter = newArray();
 				high_counter = newArray();
@@ -573,10 +625,11 @@ function SNR_main(dir, sub) {
 				area_reg = 0;
 				area_bright = 0;
 				for (q = 0; q < mean_intensity.length; q++) { //Select spots that should not be included in the regular measurement
-					if (mean_intensity[q] < low_cutoff || peak_intensity[q] < noise_max) {
+					if (mean_intensity[q] < low_cutoff || peak_intensity[q] < noise_max || area_all[q] < 0.023) { //Remove spots
 						//print("Low " + mean_intensity[q] + " / " + low_cutoff);
 						low_counter = Array.concat(low_counter, q); //Mask for low cutoff
 						filtered_spots++;
+						spot_count--;
 						}
 					else if (mean_intensity[q] > high_cutoff) {
 						//print("High " + mean_intensity[q] + " / " + high_cutoff);
@@ -584,6 +637,7 @@ function SNR_main(dir, sub) {
 						x_values_high = Array.concat(x_values_high, x_values[q]);
 						y_values_high = Array.concat(y_values_high, y_values[q]);
 						area_bright += area_all[q];
+						spot_count--;
 						/*north_high = Array.concat(north_high, north[q]);
 						northeast_high = Array.concat(northeast_high, northeast[q]);
 						east_high = Array.concat(east_high, east[q]);
@@ -594,7 +648,7 @@ function SNR_main(dir, sub) {
 						northwest_high = Array.concat(northwest_high, northwest[q]);
 						mean_intensity_high = Array.concat(mean_intensity_high, mean_intensity[q]);*/
 						}
-					else area_reg += area_all[q];
+					else if (area_all[q] > 0.023) area_reg += area_all[q];
 					//else print("Regular " + mean_intensity[q]);
 					}
 				
@@ -613,7 +667,13 @@ function SNR_main(dir, sub) {
 				count_bad = true;
 				for (q = 0; q < x_values_high.length; q++) {
 					//print(x_values_high[q], y_values_high[q]);
-					cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
+					if (expansion_method == "Gaussian") {
+						cardinal = SNR_gaussian(x_values_high[q], y_values_high[q], window_high_signal); //Run Gaussian with high xy values
+						}
+					else if (expansion_method == "Normal" && x_values_high.length < normal_limit) {
+						cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
+						}
+					else cardinal = SNR_dots(x_values_high[q], y_values_high[q], window_high_signal); //Run dots with high xy values
 					}
 				count_bad = temp;
 				
@@ -625,14 +685,24 @@ function SNR_main(dir, sub) {
 					for (p = 0; p < x_values_high.length; p++) {
 						if (x_values[q] == x_values_high[p] && y_values[q] == y_values_high[p]) found = true;
 						}
-					if (found == false) cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with new x and y values, screen out low and high signal
+					if (found == false) {
+						cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with new x and y values
+						
+						if (expansion_method == "Gaussian") {
+							cardinal = SNR_gaussian(x_values[q], y_values[q], window_reg_signal); //Run Gaussian with xy values
+							}
+						else if (expansion_method == "Normal" && x_values.length < normal_limit) {
+							cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with xy values
+							}
+						else cardinal = SNR_dots(x_values[q], y_values[q], window_reg_signal); //Run dots with xy values
+							}
 					}
 				
-				print(x_values.length-low_counter.length + " Regular points processed");
+				print(spot_count + " Regular points processed");
 				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
 				if (filtered_spots > 0) print(filtered_spots + " points filtered");
 				
-				
+				Array.getStatistics(mean_intensity, temp, temp, mean, temp);
 				if (area_reg > area_cutoff) {
 					selectImage(window_reg_signal); 
 					run("Create Selection");
@@ -712,7 +782,7 @@ function SNR_main(dir, sub) {
 				}
 			else { //Do not filter spots
 				//Create Selection of signal
-				print(nResults + " points processed");
+				print(spot_count + " points processed");
 				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
 				selectImage(window_signal);
 				run("Create Selection");
@@ -751,7 +821,7 @@ function SNR_main(dir, sub) {
 			//Prep Images
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
-			if (File.exists(inDir + output+ "\\Merged Images\\Subtract\\" + stripath + ".tif") == false) saveAs("tif", inDir + output+ "\\Merged Images\\Subtract\\" + stripath + ".tif");
+			if (File.exists(mergeDir + "\\Subtract\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Subtract\\" + stripath + ".tif");
 			run("Select None");
 			close();
 			selectImage(window_MaxIP);
@@ -761,20 +831,21 @@ function SNR_main(dir, sub) {
 			run("Create Selection");
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
-			if (File.exists(inDir + output+ "\\Merged Images\\Max\\" + stripath + ".tif") == false) saveAs("tif", inDir + output+ "\\Merged Images\\Max\\" + stripath + ".tif"); //Save for future use
+			if (File.exists(mergeDir + "\\Max\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Max\\" + stripath + ".tif"); //Save for future use
 			getMinAndMax(min, max); //Set max to x10 noise
 			setMinAndMax(min, min + array_results[2] * 10);
 			//print(min, max);
 			//print(min + array_results[2] * 10);
 			run("8-bit");
+			setForegroundColor(0, 0, 0);
 			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[5] + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[6], 10, 40, 'white');
 			else if (filter == true && x_values_high.length == 0) drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[5], 10, 40, 'white');
 			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[3], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
-			if (File.exists(inDir + output+ "\\Merged Images\\Median\\" + stripath + ".tif") == false) saveAs("tif", inDir + output+ "\\Merged Images\\Median\\" + stripath + ".tif");
+			if (File.exists(mergeDir + "\\Median\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Median\\" + stripath + ".tif");
 			run("8-bit");
-			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Singal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
+			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Signal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
 			
 			//Add Slice with Cell Noise and Signal areas on it
@@ -782,7 +853,8 @@ function SNR_main(dir, sub) {
 			run("Images to Stack", "name=Stack title=[] use");
 			setSlice(1);
 			run("Add Slice");
-			//Color in Noise
+			
+			//Fill in Noise
 			run("Select None");
 			if (filter == true && x_values_high.length > 0) {
 				roiManager("Select", newArray(0,2,4,5)); //Noise, inverse of regular signal and bright signal
@@ -797,9 +869,12 @@ function SNR_main(dir, sub) {
 				roiManager("Select", 3); //Bright Signal
 				setColor(255);
 				fill();
-				run("Enlarge...", "enlarge=1 pixel");
 				setForegroundColor(5, 5, 5);
 				run("Draw", "slice");
+				run("Enlarge...", "enlarge=1 pixel");
+				setForegroundColor(255, 255, 255);
+				run("Draw", "slice");
+				setForegroundColor(0, 0, 0);
 				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
 			else {
@@ -854,9 +929,9 @@ function SNR_main(dir, sub) {
 				print(SNR_natural_time(folder + " Folder Time Remaining: ", estimate_array));
 				}
 			else print(folder + " Folder Time Remaining: Unknown");
-			}} //end of else
+			} //end of else
 		}//end of for loop
-	
+	return final_file_list;
 	}//end of main function
 
 function SNR_background() { //Measures background, the darkest part, where there are no cells
@@ -1413,7 +1488,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		//Array.print(slope_second);
 		//print("slope_second_avg: " + slope_second_avg);
 		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
-	maxima -= slope.length * 3.535; //Once the condition has been met drop maxima back 70.7%
+	maxima -= slope.length * 2.5; //Once the condition has been met drop maxima back 50%
 	updateResults();
 	
 	
@@ -1446,7 +1521,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		close();
 		}
 	if (rsquare == true) {
-		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
 			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
@@ -1472,7 +1547,6 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		n = 0;
 		while (segments_lengths[n] != max) n++; //Find the array value that matches the largest segment
 		maxima = xvalues[segments[n]] + 5;
-		return maxima;
 		}
 	return maxima;
 	}
@@ -1518,7 +1592,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
-	if (getResult("Area", nResults - 3) < 1) {
+	if (getResult("Area", nResults - 3) < area_cutoff) {
 		sigrel = 0;
 		signoimean = 0;
 		signoimedian = 0;
@@ -1558,8 +1632,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Filtered Spots", nResults - 3, filtered_spots);
 	setResult("Maxima", nResults - 3, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
@@ -1585,8 +1659,8 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
@@ -1611,7 +1685,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	cv = getResult("StdDev", nResults - 4) / getResult("Mean", nResults - 4); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
-	if (getResult("Area", nResults - 4) < 1) { //If the area is too small
+	if (getResult("Area", nResults - 4) < area_cutoff) { //If the area is too small
 		sigrel = 0;
 		signoimean = 0;
 		signoimedian = 0;
@@ -1626,7 +1700,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	score_bright = signoimedian_bright * log((sigrel_bright-noirel_bright)/10)/log(10);
 	
-	if (getResult("Area", nResults - 3) < 1) { //if the area is too small
+	if (getResult("Area", nResults - 3) < area_cutoff_bright) { //if the area is too small
 		sigrel_bright = 0;
 		signoimean_bright = 0;
 		signoimedian_bright = 0;
@@ -1673,8 +1747,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Filtered Spots", nResults - 4, filtered_spots);
 	setResult("Maxima", nResults - 4, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 4, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 4, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 4, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) setResult("Expansion Method", nResults - 4, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) setResult("Expansion Method", nResults - 4, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 4, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 4, warnings);
 	updateResults();
@@ -1702,8 +1776,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
@@ -1728,7 +1802,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
 	
-	if (getResult("Area", nResults - 3) < 1) {
+	if (getResult("Area", nResults - 3) < area_cutoff) {
 		sigrel = 0;
 		signoimean = 0;
 		signoimedian = 0;
@@ -1773,8 +1847,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Filtered Spots", nResults - 3, filtered_spots);
 	setResult("Maxima", nResults - 3, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 3, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 3, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) setResult("Expansion Method", nResults - 3, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) setResult("Expansion Method", nResults - 3, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
@@ -1802,8 +1876,8 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	setResult("Filtered Spots", nResults - 1, filtered_spots);
 	setResult("Maxima", nResults - 1, maxima);
 	if (expansion_method == "Force Polygon") setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots < 5000) setResult("Expansion Method", nResults - 1, "Polygon");
-	if (expansion_method == "Normal" && spot_count + filtered_spots > 5000) setResult("Expansion Method", nResults - 1, "Ellipse");
+	if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) setResult("Expansion Method", nResults - 1, "Polygon");
+	if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) setResult("Expansion Method", nResults - 1, "Ellipse");
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 1, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 1, warnings);
 	updateResults();
