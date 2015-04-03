@@ -79,7 +79,7 @@ user_area_rev = false; //Check if to invert selection
 //Advanced Options
 advanced = false;
 user_area_double_check = true; //Double checks with the user if 
-force_tif = false; //Forces re-saving tif files
+recreate_tif = false; //Forces re-saving tif files
 delay = 0; //Network delay
 rsquare = false; //Check for linear fit maxima search
 output = "Out-SNRatio"; //Output folder
@@ -151,7 +151,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Signal Area Cutoff", 0, 10, area_cutoff);
 	Dialog.addSlider("Bright Signal Area Cutoff", 0, 10, area_cutoff_bright);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check"), newArray(count_bad, warning_disable, rsquare, force_tif, user_area_double_check));
+	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -170,11 +170,13 @@ if (advanced == true) { //Advanced Options Dialog
 	filter_low = Dialog.getNumber();
 	filter_high = Dialog.getNumber();
 	noise_stdev = Dialog.getNumber();
+	area_cutoff = Dialog.getNumber();
+	area_cutoff_bright = Dialog.getNumber();
 	delay = Dialog.getNumber();
 	count_bad = Dialog.getCheckbox();
 	warning_disable = Dialog.getCheckbox();
 	rsquare = Dialog.getCheckbox();
-	force_tif = Dialog.getCheckbox();
+	recreate_tif = Dialog.getCheckbox();
 	user_area_double_check = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
@@ -185,10 +187,10 @@ if (advanced == true) { //Advanced Options Dialog
 output = output + "V" + version; //Change output folder to include version number
 
 if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\""); //Check for filtering and linear fit maxima search
-	
+
 //Open Tables
 run("Table...", "name=SNR width=400 height=200");
-if (peak_intensity == true) run("Table...", "name=Peak width=400 height=200");
+if (peak_intensity == true) run("Table...", "name=Peak width=40 height=200");
 if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
@@ -225,20 +227,21 @@ File.makeDirectory(outDir); //Create specific output inDirectory
 mergeDir = inDir + "\\Out-Merged Images\\";
 if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots inDirectory
 tif_ready = File.exists(mergeDir + "\\log.txt");
-if (force_tif == true) tif_ready == false;
+if (recreate_tif == true) tif_ready = false;
 if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 	File.makeDirectory(mergeDir);
 	File.makeDirectory(mergeDir + "\\Max\\");
+	File.makeDirectory(mergeDir + "\\Max 8-bit\\");
 	File.makeDirectory(mergeDir + "\\Median\\");
 	File.makeDirectory(mergeDir + "\\Subtract\\");
 	}
 
 //RUN IT!
 total_start = getTime();
-if (File.exists(mergeDir + "\\log.txt")) File.append(output_name + " Started...", mergeDir + "\\log.txt");
+if (File.exists(mergeDir + "\\log.txt")) File.append("\nStarted...\n" + output_name, mergeDir + "\\log.txt");
 final_file_list = "";
 if (tif_ready == false) { //Point to nd2 files if no tif are available
-	print("First time running on this folder\nWill save merged images in .\\" + output + "\\Merged Images\\ for future use");
+	print("Will save merged images in .\\Out-Merged Images\\ for future use");
 	final_file_list = SNR_main(inDir, "");
 	}
 else { //Point to tif 
@@ -292,10 +295,10 @@ print(natural_time);
 
 if (File.exists(mergeDir + "\\log.txt") == false) {
 	File.saveString("The following files have been saved for future use:" + final_file_list + "\n", mergeDir + "\\log.txt");
-	File.append("\n" + output_name + " Started...", mergeDir + "\\log.txt");
+	File.append("\n" + " Started...\n" + inDir + "\n" + output_name, mergeDir + "\\log.txt");
 	}
-File.append("...Completed", mergeDir + "\\log.txt");
 
+File.append("...Completed", mergeDir + "\\log.txt");
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
@@ -351,6 +354,7 @@ function SNR_main(dir, sub) {
 				run("Duplicate...", " ");
 				window_Subtract = getImageID();
 				run("Subtract Background...", "rolling=20"); //Subtract Background
+				run("Sharpen");
 				selectImage(window_raw);
 				run("Z Project...", "projection=Median"); //Median intensity merge
 				window_Median = getImageID();
@@ -837,6 +841,7 @@ function SNR_main(dir, sub) {
 			//print(min, max);
 			//print(min + array_results[2] * 10);
 			run("8-bit");
+			if (File.exists(mergeDir + "\\Max 8-bit\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Max 8-bit\\" + stripath + ".tif");
 			setForegroundColor(0, 0, 0);
 			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[5] + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[6], 10, 40, 'white');
 			else if (filter == true && x_values_high.length == 0) drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[5], 10, 40, 'white');
@@ -1493,7 +1498,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	
 	
 	if (plot == true) { //Create plots for maxima results
-		for (n = maxima + slope.length * 3.535; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 40; n += 5) { //Continue measuring spots
 			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
@@ -1501,9 +1506,9 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 			updateResults();
 			}
 		
-		start = nResults / 2 - 9;
+		start = nResults / 2 - 19;
 		if (start < 0) start = 0;
-		stop = nResults / 2 + 10;
+		stop = nResults / 2 + 20;
 		if (stop > nResults) stop = nResults;
 		xvalues = newArray();
 		yvalues = newArray();
