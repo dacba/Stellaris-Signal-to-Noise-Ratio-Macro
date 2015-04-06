@@ -480,7 +480,6 @@ function SNR_main(dir, sub) {
 			
 			//Initialize dot expansion
 			setColor(0);
-			spot_count = nResults;
 			filtered_spots = 0;
 			x_values = newArray();
 			y_values = newArray();
@@ -495,15 +494,15 @@ function SNR_main(dir, sub) {
 				west = newArray();
 				northwest = newArray();
 				}
-			for (q = 0; q < nResults; q++) {
+			for (q = 0; q < nResults && q < 10000; q++) {
 				x_values = Array.concat(x_values, getResult("X", q));
 				y_values = Array.concat(y_values, getResult("Y", q));
 				}
-			
+			spot_count = q;
 			//Expand dots
 			if (expansion_method == "Gaussian") { //If gaussian is selected run the gaussian fitting
 				reduced_cardinal = true;
-				for (q = 0; q < x_values.length; q++) {
+				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_gaussian(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
@@ -519,7 +518,7 @@ function SNR_main(dir, sub) {
 				}
 			else if (x_values.length > normal_limit && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
 				reduced_cardinal = true;
-				for (q = 0; q < x_values.length; q++) {
+				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
@@ -534,7 +533,7 @@ function SNR_main(dir, sub) {
 					} //End of dots loop
 				}
 			else { //Force polygon or if running on normal and less than normal_limit
-				for (q = 0; q < x_values.length; q++) {
+				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
@@ -669,7 +668,7 @@ function SNR_main(dir, sub) {
 				setColor(0);
 				temp = count_bad;
 				count_bad = true;
-				for (q = 0; q < x_values_high.length; q++) {
+				for (q = 0; q < x_values_high.length && q < 10000; q++) {
 					//print(x_values_high[q], y_values_high[q]);
 					if (expansion_method == "Gaussian") {
 						cardinal = SNR_gaussian(x_values_high[q], y_values_high[q], window_high_signal); //Run Gaussian with high xy values
@@ -681,7 +680,7 @@ function SNR_main(dir, sub) {
 					}
 				count_bad = temp;
 				
-				for (q = 0; q < x_values.length; q++) {
+				for (q = 0; q < x_values.length && q < 10000; q++) {
 					found = false;
 					for (p = 0; p < low_counter.length; p++) {
 						if (q == low_counter[p]) found = true;
