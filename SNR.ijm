@@ -1,13 +1,13 @@
 
-macro "Calculate Signal to Noise Ratio v0.5.3...[c]" {
-version = "0.5.3";
+macro "Calculate Signal to Noise Ratio v0.5.4...[c]" {
+version = "0.5.4";
 /*
-Latest Version Date: 2015-3-27
+Latest Version Date: 2015-4-16
 Written by Trevor Okamoto, Research Associate, R&D. Biosearch Technologies, Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
 Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
-Copyright (C) 2014 Trevor Okamoto
+Copyright (C) 2015 Trevor Okamoto
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ run("Clear Results");
 run("Close All");
 
 if (indexOf(getInfo("os.name"), "Windows") == -1) {
-	Dialog.create("Incompatible Operating System");
+	Dialog.create("Potentially Incompatible Operating System");
 	Dialog.addMessage("This macro was developed for Windows.\nThis macro may not work as intended on other operating systems.");
 	Dialog.addCheckbox("I want to run this anyway, and accept the risks", false);
 	Dialog.show();
@@ -63,7 +63,7 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 
 //Default Variables
 tif_ready = false; //Determines if pre-saved tif files are available
-tolerance_bounding = 0.25; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
+tolerance_bounding = 0.2; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
 tolerance_upward = 0.5; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20; //Beginning Maxima value
 expansion_method = "Normal"; //Expansion Method
@@ -80,11 +80,12 @@ user_area_rev = false; //Check if to invert selection
 advanced = false;
 user_area_double_check = true; //Double checks with the user if 
 recreate_tif = false; //Forces re-saving tif files
+maxima_inc = 20; //Maxima Increment
 delay = 0; //Network delay
 rsquare = false; //Check for linear fit maxima search
 output = "Out-SNRatio"; //Output folder
-objective = 60; //Objective magnification
 count_bad = false; //Check to count large spots
+output_location = false;
 warning_cvspot = 0.5; //Warning cutoff for coefficient of variation signal
 warning_cvnoise = 0.25; //Warning cutoff for coefficient of variation noise
 warning_spot = 100; //Warning cutoff for spot number
@@ -97,8 +98,8 @@ noise_stdev = 3; //Defines the number of standard deviation points above the mea
 gauss_offset = 2; //Defines the threshold of standard deviation of the Gaussian fit
 gauss_d = 2; //Number of standard deviations to move outward of Gaussian fit
 
-area_cutoff = 5; //Area (micron^2) the regular selection must be to be counted
-area_cutoff_bright = 5; //Area (micron^2) the bright selection must be to be counted
+area_cutoff = 5.22; //Area (micron^2) the regular selection must be to be counted, specifically 50 bright spots averaging 3x3 pixels
+area_cutoff_bright = 5.22; //Area (micron^2) the bright selection must be to be counted
 
 
 
@@ -131,7 +132,7 @@ tolerance_drop = (tolerance_bounding / 5) + 0.89;
 if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 10 || tolerance_maxima < 2) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.5 - 0.8  (" + tolerance_upward + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
+	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.4 - 0.8  (" + tolerance_upward + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
 	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
 	Dialog.show();
 	}
@@ -142,7 +143,6 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.create("Advanced Options");
 	Dialog.addString("Output Folder Name:", output);
 	Dialog.addString("Exclude Files and Folders:", exclude);
-	Dialog.addChoice("Objective Magnification", newArray(60, 100));
 	Dialog.addSlider("Starting Maxima:", 0, 200, maxima);
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
 	Dialog.addSlider("Dim StdDev", 1, 5, filter_low);
@@ -151,7 +151,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Signal Area Cutoff", 0, 10, area_cutoff);
 	Dialog.addSlider("Bright Signal Area Cutoff", 0, 10, area_cutoff_bright);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check));
+	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check", "Specify Output Folder Location"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -162,9 +162,6 @@ if (advanced == true) { //Advanced Options Dialog
 	output = Dialog.getString();
 	
 	exclude = Dialog.getString();
-	objective = Dialog.getChoice();
-	objective /= 60;
-	objective = 1 / objective;
 	maxima = Dialog.getNumber();
 	tolerance_drop = Dialog.getNumber();
 	filter_low = Dialog.getNumber();
@@ -178,6 +175,7 @@ if (advanced == true) { //Advanced Options Dialog
 	rsquare = Dialog.getCheckbox();
 	recreate_tif = Dialog.getCheckbox();
 	user_area_double_check = Dialog.getCheckbox();
+	output_location = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
@@ -219,35 +217,38 @@ output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + t
 if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
 if (user_area == true) output_name += " Selection-" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
-inDir = getDirectory("Choose Directory containing .nd2 files"); //Get inDirectory
-outDir = inDir + output + "\\"; //Create base output inDirectory
+inDir = getDirectory("Choose Directory Containing Image Files"); //Get inDirectory
+if (output_location == false) outDir = inDir + output + File.separator; //Create base output inDirectory
+else outDir = getDirectory("Choose Directory where the output files should be saved") + output + File.separator;
 File.makeDirectory(outDir); //Create base output inDirectory
-outDir = outDir + output_name + "\\";//Create specific output inDirectory
+outDir = outDir + output_name + File.separator;//Create specific output inDirectory
 File.makeDirectory(outDir); //Create specific output inDirectory
-mergeDir = inDir + "\\Out-Merged Images\\";
-if (plot == true) File.makeDirectory(outDir + "\\Plots\\"); //Create Plots inDirectory
-tif_ready = File.exists(mergeDir + "\\log.txt");
+mergeDir = inDir + "Out-Merged Images" + File.separator;
+if (plot == true) File.makeDirectory(outDir + "Plots" + File.separator); //Create Plots inDirectory
+tif_ready = File.exists(mergeDir + "log.txt");
 if (recreate_tif == true) tif_ready = false;
 if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 	File.makeDirectory(mergeDir);
-	File.makeDirectory(mergeDir + "\\Max\\");
-	File.makeDirectory(mergeDir + "\\Max 8-bit\\");
-	File.makeDirectory(mergeDir + "\\Median\\");
-	File.makeDirectory(mergeDir + "\\Subtract\\");
+	File.makeDirectory(mergeDir + "Max" + File.separator);
+	File.makeDirectory(mergeDir + "Max 8-bit" + File.separator);
+	File.makeDirectory(mergeDir + "Median" + File.separator);
+	File.makeDirectory(mergeDir + "Subtract" + File.separator);
 	}
+
+tolerance_upward = 1 - tolerance_upward;
 
 //RUN IT!
 total_start = getTime();
-if (File.exists(mergeDir + "\\log.txt")) File.append("\nStarted...\n" + output_name, mergeDir + "\\log.txt");
+if (File.exists(mergeDir + "log.txt")) File.append("\nStarted...\n" + output_name, mergeDir + "log.txt");
 final_file_list = "";
-if (tif_ready == false) { //Point to nd2 files if no tif are available
-	print("Will save merged images in .\\Out-Merged Images\\ for future use");
+//if (tif_ready == false) { //Point to nd2 files if no tif are available
+	//print("Will save merged images in .\\Out-Merged Images\\ for future use");
 	final_file_list = SNR_main(inDir, "");
-	}
-else { //Point to tif 
-	print("Previous Merged images found");
-	final_file_list = SNR_main(mergeDir + "\\Max\\", "");
-	}
+	//}
+//else { //Point to tif 
+	//print("Previous Merged images found");
+	//final_file_list = SNR_main(mergeDir + "Max" + File.separator, "");
+	//}
 
 
 //Save it!
@@ -293,12 +294,12 @@ total_time = SNR_timediff(total_start, getTime()); //Get total_time array for da
 natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
 print(natural_time);
 
-if (File.exists(mergeDir + "\\log.txt") == false) {
-	File.saveString("The following files have been saved for future use:" + final_file_list + "\n", mergeDir + "\\log.txt");
-	File.append("\n" + " Started...\n" + inDir + "\n" + output_name, mergeDir + "\\log.txt");
+if (File.exists(mergeDir + "log.txt") == false) {
+	File.saveString("The following files have been saved for future use:" + final_file_list + "\n", mergeDir + "log.txt");
+	File.append("\n" + " Started...\n" + inDir + "\n" + output_name, mergeDir + "log.txt");
 	}
 
-File.append("...Completed", mergeDir + "\\log.txt");
+File.append("...Completed", mergeDir + "log.txt");
 print("-- Done --");
 showStatus("Finished.");
 }//end of macro
@@ -309,63 +310,85 @@ function SNR_main(dir, sub) {
 	final_file_list = "";
 	img_files = 0;
 	for (i = 0; i < list.length; i++) {
-		if ((endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1 && tif_ready == false) || (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true)) img_files++;
+		if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1) img_files++;
 		}
 	//print(img_files); //Debug
 	start_time = getTime();
-	for (i = 0;i < list.length; i++){ //for each file
+	for (i = 0; i < list.length; i++) { //for each file
 		showProgress(1 / list.length - 1);
 		path = sub + list[i];
 		window_MaxIP = 0;
-		if (endsWith(list[i], "/") && indexOf(path, output) == -1 && indexOf(path, exclude) == -1) { //For Folders
-			//File.makeDirectory(outDir + path); //Recreate file system in output folder
+		if ((endsWith(list[i], "/") || endsWith(list[i], "\\")) && indexOf(path, output) == -1 && indexOf(path, "Out") == -1 && indexOf(path, exclude) == -1) { //For Folders
 			SNR_main(dir, path); //Recursive Step
 			}
-		else if (endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1 && tif_ready == true) { //For tif files
-			strip = substring(list[i], lastIndexOf(list[i], "_") + 1, indexOf(list[i], ".tif"));
-			stripath = replace(substring(path, 0, indexOf(path, ".tif")), "/", "_");
-			reduced_cardinal = false;
+		else if (endsWith(list[i], "/") == false && endsWith(list[i], "\\") == false && indexOf(list[i], exclude) == -1) { //For valid files
 			print("-----\nFile: " + path);
-			//print(dir + list[i]); //Debug
-			open(dir + list[i]);
-			window_MaxIP = getImageID();
-			height = getHeight();
-			width = getWidth();
-			open(mergeDir + "\\Median\\" + list[i]); //Open Median
-			window_Median = getImageID();
-			open(mergeDir + "\\Subtract\\" + list[i]); //Open subract background image
-			window_Subtract = getImageID();
-			}
-		else if (endsWith(list[i], ".nd2") && indexOf(list[i], exclude) == -1) { //For nd2 files
-			strip = substring(list[i], 0, indexOf(list[i], ".nd2"));
-			stripath = replace(substring(path, 0, indexOf(path, ".nd2")), "/", "_");
-			run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
-			info = getImageInfo();
-			if (indexOf(substring(info, indexOf(info, "Negate") - 6, indexOf(info, "Negate")), "DAPI") > -1 || nSlices == 1) close(); //Close if it's the DAPI channel or single slice nd2
-			else {
-				//Initialize Image
-				reduced_cardinal = false;
-				print("-----\nFile: " + path);
+			stripath = replace(substring(path, 0, lastIndexOf(path, ".")), "\\", "_");
+			stripath = replace(stripath, "/", "_");
+			reduced_cardinal = false;
+			if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") && File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") && recreate_tif == false) { //If tif Files exist
+				//print(dir + list[i]); //Debug
+				open(mergeDir + "Max" + File.separator + stripath + ".tif"); //Open Max
+				window_MaxIP = getImageID();
 				height = getHeight();
 				width = getWidth();
-				window_raw = getImageID();
-				run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
-				window_MaxIP = getImageID();
-				run("Duplicate...", " ");
-				window_Subtract = getImageID();
-				run("Subtract Background...", "rolling=20"); //Subtract Background
-				run("Sharpen");
-				selectImage(window_raw);
-				run("Z Project...", "projection=Median"); //Median intensity merge
+				open(mergeDir + "Median" + File.separator + stripath + ".tif"); //Open Median
 				window_Median = getImageID();
-				run("Gaussian Blur...", "sigma=3"); //Blur Median
-				selectImage(window_raw);
-				run("Close");
+				if (File.exists(mergeDir + "Subtract" + File.separator + stripath + ".tif")) {
+					open(mergeDir + "Subtract" + File.separator + stripath + ".tif"); //Open subract background image
+					window_Subtract = getImageID();
+					}
+				else {
+					selectImage(window_MaxIP);
+					run("Duplicate", " ");
+					window_Subtract = getImageID();
+					run("Subtract Background...", "rolling=20"); //Subtract Background
+					run("Sharpen");
+					}
+				}
+			else if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif")) { //For raw files
+				if (endsWith(list[i], ".nd2")) run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
+				else if (endsWith(list[i], ".tif")) open(dir + path);
+				info = getImageInfo(); 
+				if (indexOf(info, "Name = DAPI") > -1) {
+					close(); //Close if it's the DAPI channel or single slice nd2
+					print("Skipping DAPI channel");
+					img_files--;
+					}
+				else if (nSlices == 1) {
+					close();
+					print("Files must have more than one slice");
+					img_files--;
+					}
+				else if (indexOf(list[i], "_Merge.tif") == -1){ //Only look at tif files if they are not the merged images
+					//Initialize Image
+					height = getHeight();
+					width = getWidth();
+					window_raw = getImageID();
+					run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+					window_MaxIP = getImageID();
+					run("Duplicate...", " ");
+					window_Subtract = getImageID();
+					run("Subtract Background...", "rolling=20"); //Subtract Background
+					run("Sharpen");
+					selectImage(window_raw);
+					run("Z Project...", "projection=Median"); //Median intensity merge
+					window_Median = getImageID();
+					run("Gaussian Blur...", "sigma=3"); //Blur Median
+					selectImage(window_raw);
+					run("Close");
+					}
 				}
 			}
-		//Analysis
+		//Analysis, only if a file was opened
 		if (window_MaxIP != 0) {
 			final_file_list += "\n" + list[i]; //Save file names
+			selectImage(window_MaxIP);
+			getPixelSize(pixel_unit, pixel_width, pixel_height);
+			if (pixel_unit != "pixel") {
+				pixel_width *= 9.2764378478664192949907235621521;
+				pixel_height *= 9.2764378478664192949907235621521;
+				}
 			
 			//Get User Area Selection, if needed
 			if (user_area == true) { //For selecting areas
@@ -824,7 +847,7 @@ function SNR_main(dir, sub) {
 			//Prep Images
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
-			if (File.exists(mergeDir + "\\Subtract\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Subtract\\" + stripath + ".tif");
+			if (File.exists(mergeDir + "Subtract" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Subtract" + File.separator + stripath + ".tif");
 			run("Select None");
 			close();
 			selectImage(window_MaxIP);
@@ -834,20 +857,20 @@ function SNR_main(dir, sub) {
 			run("Create Selection");
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
-			if (File.exists(mergeDir + "\\Max\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Max\\" + stripath + ".tif"); //Save for future use
+			if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max" + File.separator + stripath + ".tif"); //Save for future use
 			getMinAndMax(min, max); //Set max to x10 noise
 			setMinAndMax(min, min + array_results[2] * 10);
 			//print(min, max);
 			//print(min + array_results[2] * 10);
 			run("8-bit");
-			if (File.exists(mergeDir + "\\Max 8-bit\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Max 8-bit\\" + stripath + ".tif");
+			if (File.exists(mergeDir + "Max 8-bit" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max 8-bit" + File.separator + stripath + ".tif");
 			setForegroundColor(0, 0, 0);
 			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[5] + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[6], 10, 40, 'white');
 			else if (filter == true && x_values_high.length == 0) drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[5], 10, 40, 'white');
 			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[3], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
-			if (File.exists(mergeDir + "\\Median\\" + stripath + ".tif") == false) saveAs("tif", mergeDir + "\\Median\\" + stripath + ".tif");
+			if (File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Median" + File.separator + stripath + ".tif");
 			run("8-bit");
 			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Signal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
 			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
@@ -878,6 +901,13 @@ function SNR_main(dir, sub) {
 				run("Enlarge...", "enlarge=1 pixel");
 				setForegroundColor(255, 255, 255);
 				run("Draw", "slice");
+				for (q = 0; q < x_values.length && q < 10000; q++) {
+					found = false;
+					for (p = 0; p < low_counter.length; p++) {
+						if (q == low_counter[p]) found = true;
+						}
+					if (found == false) setPixel(x_values[q], y_values[q], 200);
+					}
 				setForegroundColor(0, 0, 0);
 				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
@@ -890,6 +920,9 @@ function SNR_main(dir, sub) {
 				roiManager("Select", 1);
 				setColor(255);
 				fill();
+				for (q = 0; q < x_values.length && q < 10000; q++) {
+					setPixel(x_values[q], y_values[q], 200);
+					}
 				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + filtered_spots, 10, 40, 'white');
 				}
 			run("Select None");
@@ -985,9 +1018,9 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	//North Point
 	for (r = 0; (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop && r < 8; r++); //Get Relative brightness of brightest pixel
 	pixel = newArray();
-	pixel_avg = 1;
+	pixel_avg = 100;
 	//print(pixel.length, pixel_avg);
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	for (r = r -1; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -1009,8 +1042,8 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	//East point
 	for (r = 0; (getPixel(xi + r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = r -1; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi + r, yi)); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -1031,8 +1064,8 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	//South Point
 	for (r = 0; (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = r -1; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -1053,8 +1086,8 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	//West point
 	for (r = 0; (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = r -1; pixel_avg > tolerance_bounding && r < 15; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi - r, yi)); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
@@ -1087,201 +1120,200 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 function SNR_polygon(xi, yi, window) { //Searches in eight cardinal directions and draws polygon on mask image
 	selectImage(window_MaxIP);
 	bright = getPixel(xi,yi) - back_median; //Get Relative brightness of brightest pixel
-	cardinal = newArray(0, 0, 0, 0, 0, 0, 0, 0); //Array for directions
+	cardinal = newArray(1, 1, 1, 1, 1, 1, 1, 1); //Array for directions
 	cap = 0;
 	r = 0;
 	
 	//North point
-	for (r = 0; (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop && r < 8; r++); 
 	pixel = newArray();
-	pixel_avg = 1;
+	pixel_avg = 100;
 	//print(pixel.length, pixel_avg);
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	for (r = 0; (pixel_avg > tolerance_bounding && r < 15) || (getPixel(xi, yi - r) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) { //Calculate the pixel_dif
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) multiply by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { //Get average of pixel_dif
+		if (pixel_dif.length > 1) { //Get average of pixel_dif
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		//print(pixel.length, pixel_avg);
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
 		}
 	cardinal[0] = r;
 	if (r >= 8) cap ++;
 
 	//Northeast point
-	for (r = 0; (getPixel(xi + r + 1, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++); 
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding * 1.414213562 && r < 15) || (getPixel(xi + r, yi - r) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi + r + 1, yi - r) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi + r, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length > 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[1] = r; 
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r; 
 	if (r >= 6) cap ++;
 	
 	//East point
-	for (r = 0; (getPixel(xi + r + 1, yi) - back_median)/bright > tolerance_drop && r < 8; r++);
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding && r < 15) || (getPixel(xi + r, yi) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi + r + 1, yi) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi + r, yi) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) {
+		if (pixel_dif.length > 1) {
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[2] = r;
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r;	cardinal[2] = r;
 	if (r >= 8) cap ++;
 	
 	//Southeast point
-	for (r = 0; (getPixel(xi + r + 1, yi + r + 1) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++);
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding * 1.414213562 && r < 15) || (getPixel(xi + r, yi + r) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi + r + 1, yi + r + 1) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi + r, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length > 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[3] = r;
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r;	cardinal[3] = r;
 	if (r >= 6) cap ++;
 	
 	//South Point
-	for (r = 0; (getPixel(xi, yi + r + 1) - back_median)/bright > tolerance_drop && r < 8; r++);
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding && r < 15) || (getPixel(xi, yi + r) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi, yi + r + 1) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length > 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[4] = r; 
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r;	cardinal[4] = r; 
 	if (r >= 8) cap ++;
 	
 	//Southwest point
-	for (r = 0; (getPixel(xi - r, yi + r + 1) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++);
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding * 1.414213562 && r < 15) || (getPixel(xi - r, yi + r) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
-		pixel = Array.concat(pixel, getPixel(xi - r, yi + r + 1) - back_median); //Add new pixel to pixel array
+		pixel = Array.concat(pixel, getPixel(xi - r, yi + r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length > 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[5] = r; 
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r;	cardinal[5] = r; 
 	if (r >= 6) cap ++;
 	
 	//West point
-	for (r = 0; (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop && r < 8; r++);;
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding && r < 15) || (getPixel(xi - r, yi) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi - r, yi) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length > 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[6] = r;
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r;	cardinal[6] = r;
 	if (r >= 8) cap ++;
 	
 	//Northwest point
-	for (r = 0; (getPixel(xi - r, yi - r) - back_median)/bright > tolerance_drop + (1 - tolerance_drop ) / 1.414213562 && r < 6; r++);
 	pixel = newArray();
-	pixel_avg = 1;
-	for (r = r; pixel_avg > tolerance_bounding * 1.414213562 && r < 15; r++) {
+	pixel_avg = 100;
+	for (r = 0; (pixel_avg > tolerance_bounding * 1.414213562 && r < 15) || (getPixel(xi - r - 1, yi - r - 1) - back_median)/bright > tolerance_drop; r++) {
 		pixel_dif = newArray(); //pixel_dif is the difference between pixels relative to the brightest pixel
 		pixel = Array.concat(pixel, getPixel(xi - r, yi - r) - back_median); //Add new pixel to pixel array
 		if (pixel.length == 4) pixel = Array.slice(pixel, 1); //Only remember the last four pixels
 		for (p = 1; p < pixel.length; p++) pixel_dif = Array.concat(pixel_dif, (pixel[p] - pixel[p-1])/bright); //Add pixel_dif values
 		for (p = 0; p < pixel_dif.length; p++) {
-			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]) / tolerance_upward; //if the difference is negative, make it positive and divide by upward tolerance
+			if (pixel_dif[p] < 0) pixel_dif[p] = abs(pixel_dif[p]); //If downward movement (negative) make positive
+			else pixel_dif[p] += pixel_dif[p] * tolerance_upward; //If upward movement (positive) increase by tolerance_upward
 			}
-		if (pixel_dif.length >= 1) { 
+		if (pixel_dif.length > 1) { 
 			Array.getStatistics(pixel_dif, dummy, dummy, pixel_avg, dummy);
 			}
 		}
 	if (pixel.length > 0) {
-		if (pixel.length < 3) r -=pixel.length;
-		else r-=2;
-		}
-	cardinal[7] = r;
+		if (pixel.length < 3) r -= pixel.length/2;
+		else r -= 2;
+		}	cardinal[1] = r;	cardinal[7] = r;
 	if (r >= 6) cap ++;
 	
 	//Array.print(cardinal);
-	xi++;
-	yi++;
-	
-	
+	//xi++;
+	//yi++;
+	/*
+	selectImage(window_MaxIP);
+	setBatchMode('show');
+	makePolygon(xi, yi - cardinal[0], xi + cardinal[1], yi - cardinal[1], xi + cardinal[2], yi, xi + cardinal[3], yi + cardinal[3], xi, yi + cardinal[4], xi - cardinal[5], yi + cardinal[5], xi - cardinal[6], yi, xi - cardinal[7], yi - cardinal[7]);
+	waitForUser("Wait");
+	run("Select None");
+	setBatchMode('hide');
+	*/
 	if (cap <= 3 || count_bad == true) {
 		selectImage(window);
 		makePolygon(xi, yi - cardinal[0], xi + cardinal[1], yi - cardinal[1], xi + cardinal[2], yi, xi + cardinal[3], yi + cardinal[3], xi, yi + cardinal[4], xi - cardinal[5], yi + cardinal[5], xi - cardinal[6], yi, xi - cardinal[7], yi - cardinal[7]);
@@ -1405,8 +1437,8 @@ function SNR_gaussian(xi, yi, window) { //Finds sub pixel location of signal and
 	setBatchMode('hide');*/
 	
 	//Prevent offset in signal mask
-	xi++;
-	yi++;
+	//xi++;
+	//yi++;
 	
 	if (cap == 0 || count_bad == true) {
 		selectImage(window);
@@ -1448,13 +1480,13 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	roiManager("Select", 0);
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
-	maxima += 5;
+	maxima += maxima_inc;
 	
 	//Second run
 	roiManager("Select", 0);
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
-	maxima += 5;
+	maxima += maxima_inc;
 	//Get first slope value
 	slope = (getResult("Count", nResults - 1) - getResult("Count", nResults - 2));
 	updateResults();
@@ -1470,7 +1502,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		//Add slopes to slope array
 		slope = Array.concat(slope, getResult("Count", nResults - 1) - getResult("Count", nResults - 2));
 		if (slope.length >= 13) slope = Array.slice(slope, 1, 13);
-		maxima += 5;
+		maxima += maxima_inc;
 		
 		
 		slope_second = Array.concat(slope_second, pow(slope[slope.length-2] - slope[slope.length-1], 2)); //Add new second slope value
@@ -1492,12 +1524,12 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		//Array.print(slope_second);
 		//print("slope_second_avg: " + slope_second_avg);
 		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
-	maxima -= slope.length * 2.5; //Once the condition has been met drop maxima back 50%
+	maxima -= slope.length * 0.5 * maxima_inc; //Once the condition has been met drop maxima back 50%
 	updateResults();
 	
 	
 	if (plot == true) { //Create plots for maxima results
-		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 40; n += 5) { //Continue measuring spots
+		for (n = maxima + slope.length * 0.5 * maxima_inc; n < maxima + maxima - maxima_start + 40; n += maxima_inc) { //Continue measuring spots
 			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
@@ -1521,11 +1553,11 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		Plot.drawLine(maxima, yvalues[yvalues.length - 1], maxima, yvalues[0]); //Draw vertical line at maxima
 		Plot.show();
 		selectWindow("Plot");
-		saveAs("PNG", outDir + "\\Plots\\" + stripath); //Save plot
+		saveAs("PNG", outDir + "Plots" + File.separator + stripath); //Save plot
 		close();
 		}
 	if (rsquare == true) {
-		for (n = maxima + slope.length * 2.5; n < maxima + maxima - maxima_start + 10; n += 5) { //Continue measuring spots
+		for (n = maxima + slope.length * 0.5 * maxima_inc; n < maxima + maxima - maxima_start + 10; n += maxima_inc) { //Continue measuring spots
 			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
@@ -1550,7 +1582,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		Array.getStatistics(segments_lengths, dumb, max, dumb, dumb);
 		n = 0;
 		while (segments_lengths[n] != max) n++; //Find the array value that matches the largest segment
-		maxima = xvalues[segments[n]] + 5;
+		maxima = xvalues[segments[n]] + maxima_inc;
 		}
 	return maxima;
 	}
@@ -1595,6 +1627,11 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
 	score = signoimedian * log((sigrel-noirel)/10)/log(10);
+	
+	
+	if (getResult("Max", nResults - 3) == 16383 || getResult("Max", nResults - 3) == 65535) { 
+		warnings += 16;
+		}
 	
 	if (getResult("Area", nResults - 3) < area_cutoff) {
 		sigrel = 0;
@@ -1715,6 +1752,13 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 			}
 		}
 	
+	if (getResult("Max", nResults - 4) == 16383 || getResult("Max", nResults - 4) == 65535) {
+		warnings += 16;
+		}
+	else if (getResult("Max", nResults - 3) == 16383 || getResult("Max", nResults - 3) == 65535) {
+		warnings += 16;
+		}
+	
 	//Set Warnings
 	/*Warning Codes
 	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
@@ -1820,12 +1864,17 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 	noirel_bright = 0;
 	score_bright = 0;
 	
+	if (getResult("Max", nResults - 3) == 16383 || getResult("Max", nResults - 3) == 65535) {
+		warnings += 16;
+		}
+	
 	//Set Warnings
 	/*Warning Codes
 	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
 	2 = Lots of filtered spots
 	4 = Low spot count (Suspicious)
 	8 = Signal is too low
+	16 = Saturated areas in 
 	*/
 	temp = 0;
 	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
@@ -1912,21 +1961,18 @@ function SNR_timediff(start, end) { //Returns an array containing the difference
 
 function SNR_natural_time(prefix, time) { //Accepts a prefix and a time array of (days, hours, minutes)
 	temp = prefix;
-	and = false;
 	if (time[0] == 0 && time[1] == 0 && time[2] == 0) return prefix + " <1 minute"; //Easy case
 	if (time[0] > 0) { //If days
 		if (time[0] == 1) temp += "1 day ";
 		else temp += toString(time[0]) + " days ";
-		and = true;
 		}
 	if (time[0] > 0 && time[1] > 0 && time[2] == 0) temp += "and "; //If only days and hours
 	if (time[1] > 0) { //If hours
 		if (time[1] == 1) temp += "1 hour ";
 		else temp += toString(time[1]) + " hours ";
-		and = true;
 		}
 	if ((time[0] > 0 || time[1] > 0) && time[2] > 0) temp += "and "; //If days or hours and minutes 
-	if (time[2] > 0) {
+	if (time[2] > 0) { //If minutes
 		temp += toString(time[2]) + " minute";
 		if (time[2] > 1) temp += "s";
 		}
