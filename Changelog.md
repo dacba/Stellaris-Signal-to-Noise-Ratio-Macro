@@ -154,3 +154,85 @@
 * SNR_timediff returns the difference between two times(ms) as an array of (days, hours, minutes)
 * Added Network delay option (default: 0s)
 	* Will delay analysis between images to prevent network saturation
+
+### Version 0.4.5
+##### March 20, 2015
+* Macro now saves maxIP and medianIP images for use in future runs
+* Will use maxIP and medianIP images if available
+* Warning codes swapped
+
+### Version 0.5.0
+##### March 23, 2015
+* Can now force recreate IP files
+* Uses subtract backgroun when finding maxima
+* Fixed score reporting on images
+* Fixed time estimation
+* Enlarge noise area by 16px instead of 11px
+* Diamonal points in polygon are limited to 6px
+* Changed score
+* Fixed major issues with polygon function
+	* Cardinal values were rotated and shifted up and to the left
+	* Certain directional functions in polygon were missing the median background adjustment
+
+### Version 0.5.1
+##### March 24, 2015
+* Fixed score to be consistent between all three functions
+* Cleaned up code
+* Fixed bug where filtered analysis wouldn't print score on image
+* Updated ellipse function with polygon fixes
+* Changed output image max LUT to be min + 10*noise
+* Score is now SNR * sqrt(signal-noise)/10
+
+### Version 0.5.2
+##### March 27, 2015
+* Switched to log for score instead of sqrt
+* Added GNU GPL
+* Added OS check
+* Fine tuned MADe Top and Bottom
+* Changed dialog phrasing
+* Use Noise/StdDev for low signal cutoff
+	* Checks if peak intensity is within noise stdDev
+* Fixed Mean_intensity flipping horizontallly
+* Added check for small areas
+	* Small areas are ignored
+
+### Version 0.5.3
+##### April 2, 2015
+* Updated comments
+* Changed variable names to be more descriptive
+* Added new Advanced options
+	* Area cutoff
+		* Lets the user change the cutoff level for low selection areas
+	* User area double check
+		* Double checks the first time the user selects the entire image for analysis during user area selection
+* Merged images are now saved in their own folder
+* log.txt is created when whole folder is analyzed
+* Macro will only use pre-saved tif files if log.txt is present
+* Limit for normal mode is no longer hard coded for 5000 points
+* fixed median/MAD calculation
+* Small spots <=2px are removed automatically
+* Fixed typos
+* Bright spots area bordered by a white and a black border
+* Maxima is dropped back 50% instead of 70% after WMA
+* Fixed bug where text was white on white on second merged image slice
+
+### Version 0.5.4 - The compatibility update
+##### April 16, 2015
+* Changed Variable Names
+* Minor Bug Fixes for maxima search
+* Limited analysis to the first 10,000 spots to prevent the program from hanging
+* UI Changes
+* Operating system compatibility update
+	* Replaced all "\" with File.separator to be compatible with other file systems
+* File input improvements
+	* Will read tif files > 1 slice
+		* Users may now convert their raw data to tif format for analysis
+	* Will look for merged tif files before opening raw file to save time
+* Framework written for different pixel scaling
+* Updated bounding
+	* Tolerance_drop occurs alongside regular expansion
+	* Fixed tolerance_upward being applied to the wrong direction
+	* Fixed issue where program would not properly average pixel difference
+	* Fixed issue where r would drop back the full pixel.length instead of half way
+* Maxima increments is now its own variable and has been increased to 20 due to the switch to subtract background and sharpen changes
+* Warning 16: Signal hits 14 or 16 bit max value (detection of clipping) 

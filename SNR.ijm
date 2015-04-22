@@ -216,6 +216,7 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
 if (user_area == true) output_name += " Selection-" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
+if (rsquare == true) output_name += " LinMaxSearch";
 
 inDir = getDirectory("Choose Directory Containing Image Files"); //Get inDirectory
 if (output_location == false) outDir = inDir + output + File.separator; //Create base output inDirectory
