@@ -1,6 +1,6 @@
 #Signal to Noise Ratio Macro Changelog
 
-#### Latest Version: <u>0.4.4</u>
+#### Latest Version: <i>0.5.5</i>
 
 ## Version 0.1
 ##### January 30, 2015
@@ -235,4 +235,18 @@
 	* Fixed issue where program would not properly average pixel difference
 	* Fixed issue where r would drop back the full pixel.length instead of half way
 * Maxima increments is now its own variable and has been increased to 20 due to the switch to subtract background and sharpen changes
-* Warning 16: Signal hits 14 or 16 bit max value (detection of clipping) 
+* Warning 16: Signal hits 14 or 16 bit max value (detection of clipping)
+
+###Version 0.5.5 - Refactoring
+##### May 7, 2015
+* Data tables are now closed at startup of the macro if the previous run was aborted
+* Added debug checkbox that enables many debug logging
+* Added "Garbage Collection" at the startup and termination of the macro
+* Refactored Functions
+	* Polygon
+	* Dots
+	* Results (partially)
+* Replaced Gaussian function
+	* Searches N-S, NW-SE, W-E, and SW-NE
+	* Fits gaussian curve in those four directions and bounds to two standard deviations in that direction
+* Fixed issue where polygon function would select one less pixel for the East, South East, South and South West directions

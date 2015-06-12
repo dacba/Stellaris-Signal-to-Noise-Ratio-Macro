@@ -1,13 +1,13 @@
 
 macro "Calculate Signal to Noise Ratio v0.5.5...[c]" {
-version = "0.5.5";
+version = "0.5.6";
 /*
-Latest Version Date: 2015-5-7
+Latest Version Date: 2015-6-1
 Written by Trevor Okamoto, Research Associate, R&D. Biosearch Technologies, Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
 Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
-Copyright (C) 2015 Trevor Okamoto, Biosearch Technologies
+Copyright (C) 2015 Trevor Okamoto, LGC Biosearch Technologies
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -79,11 +79,11 @@ if (indexOf(getVersion(), "1.49n") > -1) {
 //Default Variables
 tif_ready = false; //Determines if pre-saved tif files are available
 tolerance_bounding = 0.2; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
-tolerance_upward = 0.5; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
+tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 maxima = 20; //Beginning Maxima value
 expansion_method = "Normal"; //Expansion Method
 normal_limit = 5000; //Will run ellipse when there are more than this number of spots
-tolerance_maxima = 5; //Tolerance for maxima
+tolerance_maxima = 8; //Tolerance for maxima
 sum_intensity = false; //Check to run sum intensity or not
 peak_intensity = false; //Check to run peak intensity
 plot = false; //Check to plot find maxima curve
@@ -91,6 +91,7 @@ filter = true; //Check to filter spots
 user_area = false; //Check for user defined area
 user_area_rev = false; //Check if to invert selection
 debug_switch = false; //Enables all debug options
+separate_lut = false;
 
 //Advanced Options
 advanced = false;
@@ -129,7 +130,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
-Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Enable Debugging"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, debug_switch));
+Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, separate_lut));
 Dialog.show();
 
 //Retrieve Choices
@@ -143,12 +144,12 @@ plot = Dialog.getCheckbox();
 user_area = Dialog.getCheckbox();
 filter = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
-debug_switch = Dialog.getCheckbox();
+separate_lut = Dialog.getCheckbox();
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
 //Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 10 || tolerance_maxima < 2) {
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 15 || tolerance_maxima < 2) {
 	Dialog.create("Warning");
 	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
 	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.4 - 0.8  (" + tolerance_upward + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
@@ -156,6 +157,36 @@ if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0
 	Dialog.show();
 	}
 
+if (separate_lut == true) {
+	Dialog.create("Separate LUT");
+	
+	Dialog.addMessage("Any \"0\" will be replaced by the Auto Enhance Contrast Numbers");
+	
+	Dialog.addMessage("FITC");
+	Dialog.addNumber("min:", 0);
+	Dialog.addNumber("max:", 0);
+	Dialog.addMessage("Cy3");
+	Dialog.addNumber("min:", 0);
+	Dialog.addNumber("max:", 0);
+	Dialog.addMessage("Cy3.5");
+	Dialog.addNumber("min:", 0);
+	Dialog.addNumber("max:", 0);
+	Dialog.addMessage("Cy5.5");
+	Dialog.addNumber("min:", 0);
+	Dialog.addNumber("max:", 0);
+	
+	Dialog.show();
+	
+	min_fitc = Dialog.getNumber();
+	max_fitc = Dialog.getNumber();
+	min_cy3 = Dialog.getNumber();
+	max_cy3 = Dialog.getNumber();
+	min_cy35 = Dialog.getNumber();
+	max_cy35 = Dialog.getNumber();
+	min_cy55 = Dialog.getNumber();
+	max_cy55 = Dialog.getNumber();
+	}
+	
 if (advanced == true) { //Advanced Options Dialog
 	//waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
 	
@@ -170,7 +201,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Signal Area Cutoff", 0, 10, area_cutoff);
 	Dialog.addSlider("Bright Signal Area Cutoff", 0, 10, area_cutoff_bright);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 2, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check", "Specify Output Folder Location"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location));
+	Dialog.addCheckboxGroup(3, 3, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check", "Specify Output Folder Location", "Enable Debugging"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location, debug_switch));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -195,6 +226,7 @@ if (advanced == true) { //Advanced Options Dialog
 	recreate_tif = Dialog.getCheckbox();
 	user_area_double_check = Dialog.getCheckbox();
 	output_location = Dialog.getCheckbox();
+	debug_switch = Dialog.getCheckbox();
 	warning_cvspot = Dialog.getNumber();
 	warning_cvnoise = Dialog.getNumber();
 	warning_spot = Dialog.getNumber();
@@ -218,7 +250,7 @@ print("[Condense]", table_head);
 
 //Write Table Labels
 table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Score, Mean SNR, Median SNR, Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
-if (warning_disable == false) table_head += "Warning Code";
+if (warning_disable == false) table_head += ", Warning Code";
 print("[SNR]", table_head);
 
 if (filter == true) table_head = "File, Score, Bright Score, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
@@ -311,6 +343,7 @@ if (File.exists(mergeDir + "log.txt") == false) {
 	File.append("\n" + " Started...\n" + inDir + "\n" + output_name, mergeDir + "log.txt");
 	}
 
+File.delete(inDir + "temp.txt");
 File.append("...Completed", mergeDir + "log.txt");
 run("Collect Garbage");
 print("-- Done --");
@@ -343,6 +376,7 @@ function SNR_main(dir, sub) {
 				if (debug_switch) print(dir + list[i]); //Debug
 				open(mergeDir + "Max" + File.separator + stripath + ".tif"); //Open Max
 				window_MaxIP = getImageID();
+				channel = getMetadata("Info");
 				height = getHeight();
 				width = getWidth();
 				open(mergeDir + "Median" + File.separator + stripath + ".tif"); //Open Median
@@ -360,21 +394,33 @@ function SNR_main(dir, sub) {
 					}
 				}
 			else if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif")) { //For raw files
-				if (endsWith(list[i], ".nd2")) run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
-				else if (endsWith(list[i], ".tif")) open(dir + path);
-				info = getImageInfo(); 
-				if (indexOf(info, "Name = DAPI") > -1) {
-					close(); //Close if it's the DAPI channel or single slice nd2
-					print("Skipping DAPI channel");
-					img_files--;
+				if (endsWith(list[i], ".nd2")) { //Open Metadata first to see if it's DAPI
+					run("Bio-Formats Importer", "open=[" + dir + path + "] display_metadata view=[Metadata only]");
+					selectWindow("Original Metadata - " + list[i]);
+					saveAs("Text", inDir + "temp.txt");
+					run("Close");
+					info = File.openAsString(inDir + "temp.txt");
+					if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";
+					else if (indexOf(info, "Name	Cy3.5") > -1) channel = "Cy3.5";
+					else if (indexOf(info, "Name	Cy5.5") > -1) channel = "Cy5.5";
+					else if (indexOf(info, "Name	FITC") > -1) channel = "FITC";
+					if (indexOf(info, "Name	DAPI") == -1) run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
+					else {
+						print("Skipping DAPI channel");
+						img_files--;
+						}
 					}
-				else if (nSlices == 1) {
+				else if (endsWith(list[i], ".tif")) {
+					open(dir + path);
+					channel = getMetadata("Info");
+					}
+				
+				if (nSlices == 1) {
 					close();
 					print("Files must have more than one slice");
 					img_files--;
 					}
-				else if (indexOf(list[i], "_Merge.tif") == -1){ //Only look at tif files if they are not the merged images
-					//Initialize Image
+				else { //Initialize Image
 					height = getHeight();
 					width = getWidth();
 					window_raw = getImageID();
@@ -863,6 +909,7 @@ function SNR_main(dir, sub) {
 			//Prep Images
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
+			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Subtract" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Subtract" + File.separator + stripath + ".tif");
 			run("Select None");
 			close();
@@ -873,12 +920,50 @@ function SNR_main(dir, sub) {
 			run("Create Selection");
 			run("Enhance Contrast", "saturated=0.01"); //Make the MaxIP image pretty
 			run("Select None");
+			getMinAndMax(min, max);
+			setMetadata("Info", channel);
+			if (separate_lut == true) {
+				//Manual
+				if (indexOf(channel, "Cy3") > -1 && min_cy3 != 0 && max_cy3 != 0) setMinAndMax(min_cy3,max_cy3); //Cy3
+				if (indexOf(channel, "Cy3.5") > -1 && min_cy35 != 0 && max_cy35 != 0) setMinAndMax(min_cy35,max_cy35); //Cy3.5
+				else if (indexOf(channel, "Cy5.5") > -1 && min_cy55 != 0 && max_cy55 != 0) setMinAndMax(min_cy55,max_cy55); //Cy5.5
+				else if (indexOf(channel, "FITC") > -1 && min_fitc != 0 && max_fitc != 0) setMinAndMax(min_fitc,max_fitc); //FITC
+				//Semi-Manual
+				if (indexOf(channel, "Cy3") > -1 && (min_cy3 == 0 || max_cy3 == 0)){
+					if (min_cy3 == 0) setMinAndMax(min,max_cy3); //Cy3
+					else if (max_cy3 == 0) setMinAndMax(min_cy3, max);
+					}
+				if (indexOf(channel, "Cy3.5") > -1 && (min_cy35 == 0 || max_cy35 == 0)){
+					if (min_cy35 == 0) setMinAndMax(min,max_cy35); //Cy3.5
+					else if (max_cy35 == 0) setMinAndMax(min_cy35, max);
+					}
+				else if (indexOf(channel, "Cy5.5") > -1 && (min_cy55 == 0 || max_cy55 == 0)){
+					if (min_cy55 == 0) setMinAndMax(min,max_cy55); //Cy5.5
+					else if (max_cy55 == 0) setMinAndMax(min_cy55, max);
+					}
+				else if (indexOf(channel, "FITC") > -1 && (min_fitc == 0 || max_fitc == 0)){
+					if (min_fitc == 0) setMinAndMax(min,max_fitc); //fitc
+					else if (max_fitc == 0) setMinAndMax(min_fitc, max);
+					}
+				//Auto
+				if (indexOf(channel, "Cy3") > -1 && (min_cy3 == 0 && max_cy3 == 0)){
+					setMinAndMax(min,max); //Cy3
+					}
+				if (indexOf(channel, "Cy3.5") > -1 && (min_cy35 == 0 && max_cy35 == 0)){
+					setMinAndMax(min,max); //Cy3.5
+					}
+				else if (indexOf(channel, "Cy5.5") > -1 && (min_cy55 == 0 && max_cy55 == 0)){
+					setMinAndMax(min,max); //Cy5.5
+					}
+				else if (indexOf(channel, "FITC") > -1 && (min_fitc == 0 && max_fitc == 0)){
+					setMinAndMax(min,max); //fitc
+					}
+				}
 			if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max" + File.separator + stripath + ".tif"); //Save for future use
-			getMinAndMax(min, max); //Set max to x10 noise
-			setMinAndMax(min, min + array_results[2] * 10);
 			//print(min, max);
 			//print(min + array_results[2] * 10);
 			run("8-bit");
+			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Max 8-bit" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max 8-bit" + File.separator + stripath + ".tif");
 			setForegroundColor(0, 0, 0);
 			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Score: " + array_results[0] + "/" + array_results[5] + "\nBright SNR/Score: " + array_results[3] + "/" + array_results[6], 10, 40, 'white');
@@ -886,6 +971,7 @@ function SNR_main(dir, sub) {
 			else drawString(path + "\nSNR/Score: " + array_results[0] + "/" + array_results[3], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
+			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Median" + File.separator + stripath + ".tif");
 			run("8-bit");
 			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Signal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
@@ -992,28 +1078,43 @@ function SNR_main(dir, sub) {
 
 function SNR_background() { //Measures background, the darkest part, where there are no cells
 	selectImage(window_Median);
+	run("Duplicate...", " ");
+	run("8-bit");
 	run("Select None");
 	roiManager("Select", 0);
-	setAutoThreshold("Default"); //Default is good for background (especially very dark cell noise)
+	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0"); //Local Threshold Background
 	run("Create Selection");
 	run("Enlarge...", "enlarge=1 pixel");
+	run("Enlarge...", "enlarge=-16 pixel");
+	roiManager("Add");
+	close();
+	selectImage(window_Median);
+	roiManager("Select", newArray(0, 1));
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results
+	roiManager("Deselect");
+	roiManager("Select", 1);
+	roiManager("Delete");
 	} //End of Function
 
 function SNR_noise() { //Measures Cell Noise
 	selectImage(window_Median);
+	run("Duplicate...", " ");
+	run("8-bit");
 	run("Select None");
 	roiManager("Select", 0);
-	setAutoThreshold("Default dark"); //Threshold cell noise
+	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0 white"); //Local Threshold cell noise
 	run("Create Selection"); //Create selection 2
 	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
 	run("Enlarge...", "enlarge=16 pixel"); //Expand Cell noise boundary; Needed for exceptional images
 	roiManager("Add");
+	close();
+	selectImage(window_Median);
 	roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
 	roiManager("AND"); //Select regions of Cell Noise
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
+	
 	}//End of Noise function
 
 function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, position 0
@@ -1406,7 +1507,7 @@ function SNR_calculate_base() { //Calculates base SNR and other base values
 	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - 3) / getResult("Mean", nResults - 3); //Coefficient of Variation - Signal
-	score = signoimedian * log((sigrel-noirel)/10)/log(10);
+	score = signoimedian * (log(sigrel-noirel)/log(10) - 1);
 	if (getResult("Max", nResults - 3) == 16383 || getResult("Max", nResults - 3) == 65535) { 
 		warnings += 16;
 		}
@@ -1468,10 +1569,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	if (expansion_method == "Gaussian") setResult("Expansion Method", nResults - 3, "Gaussian");
 	if (warnings > 0 && warning_disable == false) setResult("Warning Code", nResults - 3, warnings);
 	updateResults();
-	
-	
-	
-	
+
 	//String manipulation and saving to SNR table
 	String.resetBuffer;
 	String.copyResults; //Copy results to clipboard

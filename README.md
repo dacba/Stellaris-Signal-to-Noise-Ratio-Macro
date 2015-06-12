@@ -1,50 +1,44 @@
 Fiji/ImageJ Stellaris StN Ratio Macro
 =============
 
-This repository contains the SNR.ijm macro for Fiji/ImageJ
-This macro calculates the signal to noise ratio of a Stellaris RNA FISH Experiment given the raw .nd2 files.
+This repository contains the SNR.ijm macro for Fiji/ImageJ.
+
+This macro calculates the signal to noise ratio of a Stellaris RNA FISH Experiment given the image stacks.
 
 Purpose
 -------
-The overall goal of this macro is to quickly and accurately separate a Stellaris RNA FISH image into three sections: Signal, Intra-cellular Noise, and Extra-cellular Noise.
+The overall goal of this macro is to quickly and accurately separate a Stellaris RNA FISH image into three sections: Signal, Intra-cellular Noise, and Extra-cellular Background.  Then, to calculate the ratio of signal to Intra-cellular Noise relative to the Extra-cellular Background.
 
 Scope
 -----
-This program is designed as a quick and automatic measurement of Stellaris RNA FISH results.  It takes a look at the median signal value and the median noise values for it's calculations.  It is not intended for spot-by-spot analysis, spot count(only gives approximate count), cell-by-cell analysis, or co-localization analysis.
+This program is designed as a quick and automatic measurement of Stellaris RNA FISH results.  It is not intended for spot-by-spot analysis, spot count(only gives approximate count), cell-by-cell analysis, or co-localization analysis.
 
 How it works
 ------------
-The user is queried for the Bounding Stringency, Upward Stringency, Starting Maxima, and Maxima Tolerance.
+The user is presented with tolerance and stringency options to tweak the behavior of the macro and then queried for the folder location of the images the user wishes to analyze.
 
-Files are opened by the macro for processing.  If the image is a Z stack and needs to be compressed, it is MaxIP merged and Median merged.  The local maxima is found using the find maxima command.  The x and y values are fed, pair-by-pair into the dots or polygon function for masking.
-The polygon/dots function draws polygons or ellipsies to the signal mask image. After all x and y values have been analysed the signal mask is created and stored in the ROI manager, along with its inverse.  The signal, noise and background are to measured for noise and background.
+Files are opened by the macro for processing.  The image stacks are compressed using Max and Median intensity projection methods.  The local maxima for the signal is found using the "Find Maxima" command.  Using the local maxima, a mask is created that selects all signal.  Local thresholding selects Intra-cellular Noise.
 
-The results function calculates the relative Signal brightness, Noise Brightness and Signal to Noise Ratio. After, a tif with three pages, containing the MaxIP image, selections, and median image is created for troubleshooting and verification purposes.
+The results calculated are the relative Signal brightness, Noise Brightness and Signal to Noise Ratio. After, a tif with three pages, containing the MaxIP image, selections, and median image is created for troubleshooting and verification purposes.
 
 Input
 -----
-### Sliders
 
+###Bounding and Spot Count Alterations
 ##### Bounding Stringency
-- Default = 0.25
+- Default = 0.2
 - Determines the stringency of the bounding functions, higher meaning more strict
 
 ##### Upward Stringency
-- Default = 0.8
+- Default = 0.5
 - Determines the stringency of the bounding function for upwards movement
-
-##### Starting Maxima
-- Default = 20
-- Determines where the program starts looking for the right Noise value to plug into the find maxima tool
 
 ##### Maxima Tolerance
 - Default = 5
 - Determines the target value for the second derivative of the maxima graph
 
+###Other Options
 
-
-#### Checkboxes
-All default to off
 ##### Sum Intensity and Peak Intensity
 * Estimates the sum intensity of the spots, or reports the peak intensity
 * Saved as a csv file in the output folder
@@ -56,10 +50,10 @@ All default to off
 * The program will ignore the users selection for measurements
 * Useful if there are autoflourescent spots or if you would like to analyze a single cell
 ##### Signal Filtering
-* Spots are filtered by their mean brightness
+* Spots are filtered out if their peak brightness falls within three standard deviation points of the mean noise value
 * Mean brightness is gathered and the standard deviation is estimated using Median Absolute Deviation
-* Spots lower than 2 standard deviation points are filtered out
-* Spots higher than 5 standard deviation points are analyzed separately
+* Spots lower than 2 (default) standard deviation points are filtered out
+* Spots higher than 5 (default) standard deviation points are analyzed separately
 ##### Advanced Options
 * When enabled, a second dialog will appear containing advanced options and tweaks
 * It's highly recommended to not change these options
@@ -68,18 +62,8 @@ All default to off
 		* Will exclude files and folders containing the string you enter here
 	* Output Folder Name
 		* Changes the name of the output folder
-	* Include Large Spots
-		* If the program is selecting large areas for the signal when it shouldn't, try disabling this option
 	* Disable Warning codes
 		* If you would rather not get any warning codes in the output csv file, enable this option
-	* Warning cutoffs
-		* Change these cutoffs to trigger warning codes more or less often 
-
-
-### Folder Selection
-- The use is queried for the location of the files.
-- Only non-DAPI channel nd2 files will be processed
-
 
 Output:
 -------
