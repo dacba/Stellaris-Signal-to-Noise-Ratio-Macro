@@ -106,7 +106,7 @@ output_location = false;
 warning_cvspot = 0.5; //Warning cutoff for coefficient of variation signal
 warning_cvnoise = 0.25; //Warning cutoff for coefficient of variation noise
 warning_spot = 100; //Warning cutoff for spot number
-warning_badspot = 30; //Warning cutoff for filtered spot number
+warning_badspot = 0.5; //Warning cutoff for filtered spot number
 warning_disable = false; //Disable warnings
 exclude = "NULL"; //Will exclude any file or folder containing this string
 filter_low = 2; //Defines the number of standard deviation points below the mean to filter signal
@@ -161,6 +161,7 @@ if (separate_lut == true) {
 	Dialog.create("Separate LUT");
 	
 	Dialog.addMessage("Any \"0\" will be replaced by the Auto Enhance Contrast Numbers");
+	Dialog.addMessage("\nEx.\nEnter 0 for min and any number to max\nto let the program pick the min value");
 	
 	Dialog.addMessage("FITC");
 	Dialog.addNumber("min:", 0);
@@ -206,7 +207,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
 	Dialog.addSlider("Suspicious Spot Count", 0, 200, warning_spot);
-	Dialog.addSlider("Filtered Spot Count", 0, 50, warning_badspot);
+	Dialog.addSlider("Filtered Spot Ratio", 0, 1, warning_badspot);
 	Dialog.show();
 	
 	output = Dialog.getString();
@@ -266,8 +267,13 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 //Create Directories
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
-if (user_area == true) output_name += " Selection-" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 if (rsquare == true) output_name += " LinMaxSearch";
+if (separate_lut == true) output_name += " LUT-";
+if (separate_lut == true && min_cy3 !=0 && max_cy3 != 0) output_name += min_cy3 + "-" + max_cy3;
+if (separate_lut == true && min_cy35 !=0 && max_cy35 != 0) output_name += "_" + min_cy35 + "-" + max_cy35;
+if (separate_lut == true && min_cy55 !=0 && max_cy55 != 0) output_name += "_" + min_cy55 + "-" + max_cy55;
+if (separate_lut == true && min_fitc !=0 && max_fitc != 0) output_name += "_" + min_fitc + "-" + max_fitc;
+if (user_area == true) output_name += " Selection-" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
 inDir = getDirectory("Choose Directory Containing Image Files"); //Get inDirectory
 if (output_location == false) outDir = inDir + output + File.separator; //Create base output inDirectory
@@ -500,6 +506,9 @@ function SNR_main(dir, sub) {
 			
 			//Get Median Background Level
 			SNR_background();
+			roiManager("Deselect");
+			roiManager("Select", 1);
+			roiManager("Delete");
 			back_median = getResult("Median", nResults - 1);
 			run("Clear Results");
 			
@@ -1092,9 +1101,6 @@ function SNR_background() { //Measures background, the darkest part, where there
 	roiManager("Select", newArray(0, 1));
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results
-	roiManager("Deselect");
-	roiManager("Select", 1);
-	roiManager("Delete");
 	} //End of Function
 
 function SNR_noise() { //Measures Cell Noise
@@ -1539,6 +1545,7 @@ function SNR_results() { //String Manipulation and Saves results to tables
 	2 = Lots of filtered spots
 	4 = Low spot count (Suspicious)
 	8 = Signal area is too low
+	16 = Signal Clipping
 	*/
 	temp = 0;
 	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
@@ -1548,8 +1555,11 @@ function SNR_results() { //String Manipulation and Saves results to tables
 			}
 		}
 	if (cv > warning_cvspot || temp == 1) warnings += 1;
-	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
+	if (getResult("Filtered Spots", nResults - 3)/(getResult("Spots", nResults - 3) + getResult("Filtered Spots", nResults - 3)) > warning_badspot) warnings += 2;
 	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
+	if (getResult("Max", nResults - 3) == 16383 || getResult("Max", nResults - 3) == 65535) {
+		warnings += 16;
+		}
 	
 	//Set results
 	for (m = 1; m <= 3; m++) { //Calculate CV for each selection
@@ -1653,6 +1663,7 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 	2 = Lots of filtered spots
 	4 = Low spot count (Suspicious)
 	8 = Signal is too low
+	16 = Signal Clipping
 	*/
 	temp = 0;
 	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
@@ -1661,8 +1672,8 @@ function SNR_bright_results() { //String Manipulation and Saves results to table
 			temp = 1;
 			}
 		}
-	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
-	if (getResult("Filtered Spots", nResults - 4) > warning_badspot) warnings += 2;
+	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv
+	if (getResult("Filtered Spots", nResults - 4)/(getResult("Spots", nResults - 4) + getResult("Filtered Spots", nResults - 4)) > warning_badspot) warnings += 2;
 	if (getResult("Spots", nResults - 4) < warning_spot) warnings += 4;
 	
 	//Set results
@@ -1772,7 +1783,7 @@ function SNR_bright_results_null() { //String Manipulation and Saves results to 
 			}
 		}
 	if (cv > warning_cvspot || temp == 1) warnings += 1; //Check cv for
-	if (getResult("Filtered Spots", nResults - 3) > warning_badspot) warnings += 2;
+	if (getResult("Filtered Spots", nResults - 3)/(getResult("Spots", nResults - 3) + getResult("Filtered Spots", nResults - 3)) > warning_badspot) warnings += 2;
 	if (getResult("Spots", nResults - 3) < warning_spot) warnings += 4;
 	
 	//Set results
