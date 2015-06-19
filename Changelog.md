@@ -1,6 +1,6 @@
 #Signal to Noise Ratio Macro Changelog
 
-#### Latest Version: <i>0.5.5</i>
+#### Latest Version: <i>0.5.7</i>
 
 ## Version 0.1
 ##### January 30, 2015
@@ -250,3 +250,26 @@
 	* Searches N-S, NW-SE, W-E, and SW-NE
 	* Fits gaussian curve in those four directions and bounds to two standard deviations in that direction
 * Fixed issue where polygon function would select one less pixel for the East, South East, South and South West directions
+
+###Version 0.5.6.1 - Misc. Features
+##### June 12, 2015
+* Increased Maxima Tolerance to 8, and Upward Tolerance to 0.8
+* Added Custom Min/Max for output images
+* Folder output name changes based on custom min/max values
+* Moved Debug toggle to Advanced Options
+* Fixed Issue where table header was missing commas
+* Added metadata to all tif files indicating their channel
+* Opens metadata of images first to skip DAPI
+* Switch to Phansalkar auto local threshold in selecting Noise
+* Simplified Score calculation, no functional change
+* Changed Filtered Spot warning to be a percentage of total spots instead of an absolute cutoff.
+	* Will throw warning when filtered spots account for 50% of all spots detected
+* Fixed issue where noise ROI was being deleted
+
+###Version 0.5.7 - Results Refactor
+##### June 18, 2015
+* Fixed Crash when the program encountered a tiff file with only one page
+* Min/Max settings default to '0'
+* Refactored Results functions into two functions
+	* Removed reliance on clipboard
+* Cited Phansalskar Paper on adaptive local thresholding used in this program
