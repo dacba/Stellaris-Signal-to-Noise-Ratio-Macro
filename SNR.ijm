@@ -1,8 +1,8 @@
 
 macro "Calculate Signal to Noise Ratio v0.5.7...[c]" {
-version = "0.5.7";
+version = "0.5.7.1";
 /*
-Latest Version Date: 2015-6-18
+Latest Version Date: 2015-7-1
 Written by Trevor Okamoto, Research Associate, R&D. Biosearch Technologies, Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
@@ -22,7 +22,7 @@ Copyright (C) 2015 Trevor Okamoto, LGC Biosearch Technologies
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-Tested on ImageJ version 1.49o, 1.48v
+Tested on ImageJ version 1.49v
 !!!1.49n does not work as intended!!!
 */
 
@@ -91,7 +91,7 @@ filter = true; //Check to filter spots
 user_area = false; //Check for user defined area
 user_area_rev = false; //Check if to invert selection
 debug_switch = false; //Enables all debug options
-separate_lut = false;
+custom_lut = false;
 
 //Advanced Options
 advanced = false;
@@ -139,7 +139,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
-Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, separate_lut));
+Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut));
 Dialog.show();
 
 //Retrieve Choices
@@ -153,7 +153,7 @@ plot = Dialog.getCheckbox();
 user_area = Dialog.getCheckbox();
 filter = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
-separate_lut = Dialog.getCheckbox();
+custom_lut = Dialog.getCheckbox();
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
@@ -166,11 +166,11 @@ if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0
 	Dialog.show();
 	}
 
-if (separate_lut == true) {
+if (custom_lut == true) {
 	Dialog.create("Separate LUT");
 	
 	Dialog.addMessage("Any \"0\" will be replaced by the Auto Enhance Contrast Numbers");
-	Dialog.addMessage("\nEx.\nEnter 0 for min and any number to max\nto let the program pick the min value");
+	Dialog.addMessage("\nEx.\nEnter 0 for min and any number to max to let the program pick the min value");
 	
 	Dialog.addMessage("FITC");
 	Dialog.addNumber("min:", 0);
@@ -277,11 +277,11 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
 if (rsquare == true) output_name += " LinMaxSearch";
-if (separate_lut == true) output_name += " LUT-";
-if (separate_lut == true && min_cy3 !=0 && max_cy3 != 0) output_name += min_cy3 + "-" + max_cy3;
-if (separate_lut == true && min_cy35 !=0 && max_cy35 != 0) output_name += "_" + min_cy35 + "-" + max_cy35;
-if (separate_lut == true && min_cy55 !=0 && max_cy55 != 0) output_name += "_" + min_cy55 + "-" + max_cy55;
-if (separate_lut == true && min_fitc !=0 && max_fitc != 0) output_name += "_" + min_fitc + "-" + max_fitc;
+if (custom_lut == true) output_name += " LUT-";
+if (custom_lut == true && min_cy3 !=0 && max_cy3 != 0) output_name = output_name + "Cy3" + min_cy3 + "-" + max_cy3;
+if (custom_lut == true && min_cy35 !=0 && max_cy35 != 0) output_name = output_name + "_Cy35" + min_cy35 + "-" + max_cy35;
+if (custom_lut == true && min_cy55 !=0 && max_cy55 != 0) output_name = output_name + "_Cy55" + min_cy55 + "-" + max_cy55;
+if (custom_lut == true && min_fitc !=0 && max_fitc != 0) output_name = output_name + "_FITC" + min_fitc + "-" + max_fitc;
 if (user_area == true) output_name += " Selection-" + toHex(random*random*random*1000) + toHex(random*random*random*1000);
 
 inDir = getDirectory("Choose Directory Containing Image Files"); //Get inDirectory
@@ -301,8 +301,6 @@ if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 	File.makeDirectory(mergeDir + "Median" + File.separator);
 	File.makeDirectory(mergeDir + "Subtract" + File.separator);
 	}
-
-tolerance_upward = 1 - tolerance_upward;
 
 //RUN IT!
 total_start = getTime();
@@ -351,7 +349,6 @@ else { //Save as Measurement csv file if running other
 total_time = newArray();
 total_time = SNR_timediff(total_start, getTime()); //Get total_time array for days, hours, and minutes difference
 natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
-print("\n" + natural_time);
 
 if (File.exists(mergeDir + "log.txt") == false) {
 	File.saveString("The following files have been saved for future use:" + final_file_list + "\n", mergeDir + "log.txt");
@@ -363,13 +360,15 @@ File.append("...Completed", mergeDir + "log.txt");
 run("Collect Garbage");
 print("-- Done --");
 showStatus("Finished.");
-}//end of macro
+} //end of macro
 
 function SNR_main(dir, sub) {
 	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list
 	final_file_list = "";
 	img_files = 0;
+	img_processed = 0;
+	img_skip = 0;
 	for (i = 0; i < list.length; i++) {
 		if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1) img_files++;
 		}
@@ -427,6 +426,7 @@ function SNR_main(dir, sub) {
 					else {
 						print("Skipping DAPI channel");
 						img_files--;
+						img_skip++;
 						}
 					}
 				else if (endsWith(list[i], ".tif")) {
@@ -438,6 +438,7 @@ function SNR_main(dir, sub) {
 						window_raw = 0;
 						print("Files must have more than one slice");
 						img_files--;
+						img_skip++;
 						}
 					}
 				if (window_raw != 0) { //Initialize Image if opened
@@ -460,6 +461,7 @@ function SNR_main(dir, sub) {
 			}
 		//Analysis, only if a file was opened
 		if (window_MaxIP != 0) {
+			img_processed++;
 			final_file_list += "\n" + list[i]; //Save file names
 			selectImage(window_MaxIP);
 			getPixelSize(pixel_unit, pixel_width, pixel_height);
@@ -944,7 +946,7 @@ function SNR_main(dir, sub) {
 			run("Select None");
 			getMinAndMax(min, max);
 			setMetadata("Info", channel);
-			if (separate_lut == true) {
+			if (custom_lut == true) {
 				//Manual
 				if (indexOf(channel, "Cy3") > -1 && min_cy3 != 0 && max_cy3 != 0) setMinAndMax(min_cy3,max_cy3); //Cy3
 				if (indexOf(channel, "Cy3.5") > -1 && min_cy35 != 0 && max_cy35 != 0) setMinAndMax(min_cy35,max_cy35); //Cy3.5
@@ -1084,8 +1086,8 @@ function SNR_main(dir, sub) {
 				wait(delay*1000); //Delay for network
 				}
 			
-			remaining = img_files - i;
-			estimate = round((getTime() - start_time) * remaining / (img_files - remaining));
+			remaining = img_files - img_processed;
+			estimate = round(((getTime() - start_time) / img_processed) * remaining);
 			if (sub == "") folder = "Root";
 			else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
 			if (estimate < 259200000) {
@@ -1096,7 +1098,7 @@ function SNR_main(dir, sub) {
 			} //end of else
 		}//end of for loop
 	return final_file_list;
-	}//end of main function
+	} //end of main function
 
 function SNR_background() { //Measures background, the darkest part, where there are no cells
 	selectImage(window_Median);
@@ -1705,7 +1707,7 @@ function SNR_save_results(boo) { //Save Results
 
 function SNR_timediff(start, end) { //Returns an array containing the difference between the start and end times in (days, hours, minutes)
 	time = newArray(0, 0, 0);
-	seconds = abs(round((end - start) / 1000));
+	seconds = round((end - start) / 1000);
 	if (seconds >= 60) { //If longer than a minute
 		if (seconds/60 >= 60) { //If longer than an hour
 			if (seconds/3600 >= 24) { //If longer than a day
