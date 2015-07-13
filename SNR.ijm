@@ -1,9 +1,9 @@
 
 macro "Calculate Signal to Noise Ratio v0.5.7...[c]" {
-version = "0.5.7.1";
+version = "0.5.7.2";
 /*
-Latest Version Date: 2015-7-1
-Written by Trevor Okamoto, Research Associate, R&D. Biosearch Technologies, Inc.
+Latest Version Date: 2015-7-13
+Written by Trevor Okamoto, Research Associate, Stellaris R&D. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
 Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
@@ -23,7 +23,7 @@ Copyright (C) 2015 Trevor Okamoto, LGC Biosearch Technologies
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Tested on ImageJ version 1.49v
-!!!1.49n does not work as intended!!!
+Not Compatible with 1.49n
 */
 
 //Initialize
@@ -436,7 +436,7 @@ function SNR_main(dir, sub) {
 					if (nSlices == 1) {
 						close();
 						window_raw = 0;
-						print("Files must have more than one slice");
+						print("Tiff files must have more than one slice");
 						img_files--;
 						img_skip++;
 						}
@@ -781,6 +781,7 @@ function SNR_main(dir, sub) {
 					//print(x_values_high[q], y_values_high[q]);
 					if (expansion_method == "Gaussian") {
 						cardinal = SNR_gauss_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run Gaussian with high xy values
+						
 						}
 					else if (expansion_method == "Normal" && x_values_high.length < normal_limit) {
 						cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
@@ -811,8 +812,8 @@ function SNR_main(dir, sub) {
 					}
 				
 				print(spot_count + " Regular points processed");
-				if (x_values_high.length > 0) print(x_values_high.length + " bright spots");
-				if (filtered_spots > 0) print(filtered_spots + " points filtered");
+				if (x_values_high.length > 0) print(x_values_high.length + " bright points");
+				if (filtered_spots > 0) print(filtered_spots + " points ignored");
 				
 				Array.getStatistics(mean_intensity, temp, temp, mean, temp);
 				if (area_reg > area_cutoff) {
@@ -825,7 +826,7 @@ function SNR_main(dir, sub) {
 					close();
 					}
 				else {
-					print("Too little/No Signal Detected, ignoring");
+					print("Signal Area too small, ignoring");
 					selectImage(window_reg_signal);
 					makeRectangle(0, 0, 2, 2);
 					roiManager("Add");
@@ -847,7 +848,7 @@ function SNR_main(dir, sub) {
 						close();
 						}
 					else {
-						print("Bright spot area is too small, ignoring");
+						print("Bright Signal area too small, ignoring");
 						selectImage(window_high_signal);
 						close();
 						x_values_high = newArray();
@@ -895,7 +896,7 @@ function SNR_main(dir, sub) {
 			else { //Do not filter spots
 				//Create Selection of signal
 				print(spot_count + " points processed");
-				if (filtered_spots > 0) print(filtered_spots + " bad points detected");
+				if (filtered_spots > 0) print(filtered_spots + " points ignored");
 				selectImage(window_signal);
 				run("Create Selection");
 				roiManager("Add"); //Create Signal selection
@@ -1087,14 +1088,18 @@ function SNR_main(dir, sub) {
 				}
 			
 			remaining = img_files - img_processed;
+			estimate = 0;
 			estimate = round(((getTime() - start_time) / img_processed) * remaining);
+			if (estimate == NaN) estimate = 0;
 			if (sub == "") folder = "Root";
 			else folder = "\"" + substring(sub, 0, lengthOf(sub) - 1) + "\"";
-			if (estimate < 259200000) {
+			if (estimate >= 55000) { //If more than one minute
 				estimate_array = SNR_timediff(0, estimate);
 				print(SNR_natural_time(folder + " Folder Time Remaining: ", estimate_array));
 				}
-			else print(folder + " Folder Time Remaining: Unknown");
+			else {
+				print(folder + " Folder Time Remaining: " + round(estimate / 10000)*10 + " seconds");
+				}
 			} //end of else
 		}//end of for loop
 	return final_file_list;
@@ -1188,19 +1193,27 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	}//End of dot function
 
 function SNR_gauss_expand(all_pixel) { //Returns number of pixels to expand in a certain direction
-	result = newArray(0, 0);
+	result = newArray(0, 0, 0);
 	for (p = 1; p <= np_radii; p++) {
 		counting = newArray();
 		pixel = newArray();
 		for (n = -p; n <= p; n++) counting = Array.concat(counting, n); //Create counting array
 		for (n = -p; n <= p; n++) pixel = Array.concat(pixel, all_pixel[(all_pixel.length-1)/2+n]); //Create pixel array
 		Fit.doFit(12, counting, pixel); //Do gaussian fit
+		//print(Fit.p(1), Fit.p(3));
 		if (Fit.rSquared < 0.95 || abs(Fit.p(2)) > abs(counting[0]) || Fit.p(3) > counting.length/2) return result;
 		result[0] = Fit.p(2);
 		result[1] = Fit.p(3);
+		result[2] = Fit.p(1);
+		/*
+		0 = offset
+		1 = amplitude
+		2 = center
+		3 = sd
+		*/
 		}
 	if (p == np_radii) return result;
-	else return newArray(0, 1); //Return center and standard deviation
+	else return newArray(0, 1, 0); //Return center and standard deviation
 	}
 
 function SNR_getline(xi, yi, direction, radii) { //Gets line with center of (xi, yi) of radii 
@@ -1250,6 +1263,8 @@ function SNR_gauss_polygon(xi, yi, window) {
 	result = SNR_gauss_expand(pixel);
 	cardinal[5] = result[0] - result[1]*gauss_d;
 	cardinal[1] = result[0] + result[1]*gauss_d;
+	
+	//Array.print(Array.concat(xi, yi, result[2], cardinal));
 	
 	for (i = 0; i < cardinal.length; i++) {
 		if (cardinal[i] > 5) cap ++;
