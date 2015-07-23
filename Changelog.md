@@ -1,6 +1,6 @@
 #Signal to Noise Ratio Macro Changelog
 
-#### Latest Version: <i>0.5.7</i>
+#### Latest Version: <i>0.5.7.2</i>
 
 ## Version 0.1
 ##### January 30, 2015
@@ -273,3 +273,13 @@
 * Refactored Results functions into two functions
 	* Removed reliance on clipboard
 * Cited Phansalskar Paper on adaptive local thresholding used in this program
+
+### Version 0.5.7.1 - Bug Fixes
+##### July 1, 2015
+* Fixed bug where time remaining would reach zero and count backwards
+* Renamed separate_lut to custom_lut
+
+### Version 0.5.7.2 - Bug Fixes
+* Changed some phrasing in log output
+* Estimated time now reports to the nearest 10 seconds when there is less than one minute remaining
+* Gaussian expansion outputs the amplitude when fitting (Currently not in use)

@@ -1,8 +1,8 @@
 
 macro "Calculate Signal to Noise Ratio v0.5.7...[c]" {
-version = "0.5.7.2";
+version = "0.5.7.3";
 /*
-Latest Version Date: 2015-7-13
+Latest Version Date: 2015-7-17
 Written by Trevor Okamoto, Research Associate, Stellaris R&D. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
@@ -91,7 +91,7 @@ filter = true; //Check to filter spots
 user_area = false; //Check for user defined area
 user_area_rev = false; //Check if to invert selection
 debug_switch = false; //Enables all debug options
-custom_lut = false;
+custom_lut = false; //Assign lut values to images
 
 //Advanced Options
 advanced = false;
@@ -387,6 +387,9 @@ function SNR_main(dir, sub) {
 			stripath = replace(substring(path, 0, lastIndexOf(path, ".")), "\\", "_");
 			stripath = replace(stripath, "/", "_");
 			reduced_cardinal = false;
+			//if (File.exists(outDir + stripath + "_Merge.tif") && recreate_tif == false) { //If file was already analyzed with the current version and settings don't do anything
+			//	print("File already analyzed with current version and settings... Skipping");
+			//	}
 			if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") && File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") && recreate_tif == false) { //If tif Files exist
 				if (debug_switch) print(dir + list[i]); //Debug
 				open(mergeDir + "Max" + File.separator + stripath + ".tif"); //Open Max
