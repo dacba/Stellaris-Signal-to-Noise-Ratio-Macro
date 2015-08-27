@@ -1,8 +1,9 @@
 
-macro "Calculate Signal to Noise Ratio v0.5.7...[c]" {
-version = "0.5.7.3";
+macro "Calculate Signal to Noise Ratio Beta...[c]" {
+version = "Beta_1.0";
+
 /*
-Latest Version Date: 2015-7-17
+Latest Version Date: 2015-8-27
 Written by Trevor Okamoto, Research Associate, Stellaris R&D. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
@@ -1610,7 +1611,7 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright, score, score_bright);
 	}
 
-function SNR_save_results(boo) { //Save Results
+function SNR_save_results(boo) { //Save Results to Window
 	//boo = 1: Results
 	//boo = 2: Bright
 	//boo = 3: Bright_Null

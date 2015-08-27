@@ -283,3 +283,8 @@
 * Changed some phrasing in log output
 * Estimated time now reports to the nearest 10 seconds when there is less than one minute remaining
 * Gaussian expansion outputs the amplitude when fitting (Currently not in use)
+
+## Beta Version 1.0
+##### July 17, 2015
+* Beta Release for testing
+* No significant changes from previous version
