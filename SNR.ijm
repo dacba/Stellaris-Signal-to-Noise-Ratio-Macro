@@ -1,6 +1,6 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "Beta_1.0";
+version = "1.0"; //Beta Version
 
 /*
 Latest Version Date: 2015-8-27
@@ -244,7 +244,7 @@ if (advanced == true) { //Advanced Options Dialog
 	warning_badspot = Dialog.getNumber();
 	}
 
-output = output + "V" + version; //Change output folder to include version number
+output = output + "Beta_" + version; //Change output folder to include version number
 
 if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\""); //Check for filtering and linear fit maxima search
 
@@ -305,7 +305,7 @@ if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 
 //RUN IT!
 total_start = getTime();
-if (File.exists(mergeDir + "log.txt")) File.append("\nStarted...\n" + output_name, mergeDir + "log.txt");
+if (File.exists(mergeDir + "log.txt")) File.append("----------\nStarted " + version + "...\n" + output_name, mergeDir + "log.txt");
 final_file_list = "";
 final_file_list = SNR_main(inDir, "");
 
@@ -352,8 +352,8 @@ total_time = SNR_timediff(total_start, getTime()); //Get total_time array for da
 natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
 
 if (File.exists(mergeDir + "log.txt") == false) {
-	File.saveString("The following files have been saved for future use:" + final_file_list + "\n", mergeDir + "log.txt");
-	File.append("\n" + " Started...\n" + inDir + "\n" + output_name, mergeDir + "log.txt");
+	File.saveString(inDir + "\n----------" + final_file_list + "\n", mergeDir + "log.txt");
+	File.append("==========\n \nStarted " + version + "...\n" + output_name, mergeDir + "log.txt");
 	}
 
 File.delete(inDir + "temp.txt");
