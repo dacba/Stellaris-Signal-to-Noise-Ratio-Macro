@@ -2,6 +2,8 @@
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
 version = "1.0"; //Beta Version
 
+//Add total time elapsed
+
 /*
 Latest Version Date: 2015-8-27
 Written by Trevor Okamoto, Research Associate, Stellaris R&D. Biosearch Technologies Inc.
@@ -260,13 +262,13 @@ print("[SNR]", table_head);
 print("[Condense]", table_head);
 
 //Write Table Labels
-table_head = "Area, Mean, StdDev, Min, Max, Median, File, Description, Coefficient of Variation, Score, Mean SNR, Median SNR, Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
-if (warning_disable == false) table_head += ", Warning Code";
+table_head = "Area,Mean,StdDev,Min,Max,Median,File,Description,Coefficient of Variation,Score,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+if (warning_disable == false) table_head += ",Warning Code";
 print("[SNR]", table_head);
 
-if (filter == true) table_head = "File, Score, Bright Score, Mean SNR, Median SNR, Bright Median SNR, Signal, Bright Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
-else table_head = "File, Score, Mean SNR, Median SNR, Signal, Noise, Spots, Filtered Spots, Maxima, Expansion Method";
-if (warning_disable == false) table_head += ", Warning Code";
+if (filter == true) table_head = "File,Score,Bright Score,Mean SNR,Median SNR,Bright Median SNR,Signal,Bright Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+else table_head = "File,Score,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+if (warning_disable == false) table_head += ",Warning Code";
 print("[Condense]", table_head);
 
 
@@ -1627,75 +1629,75 @@ function SNR_save_results(boo) { //Save Results to Window
 	
 	{//Print First line of Raw
 		line += getResultString("Area", nResults - n);
-		line += ", " + getResultString("Mean", nResults - n);
-		line += ", " + getResultString("StdDev", nResults - n);
-		line += ", " + getResultString("Min", nResults - n);
-		line += ", " + getResultString("Max", nResults - n);
-		line += ", " + getResultString("Median", nResults - n);
-		line += ", " + getResultString("File", nResults - n);
-		line += ", " + getResultString("Description", nResults - n);
-		line += ", " + getResultString("Coefficient of Variation", nResults - n);
+		line += "," + getResultString("Mean", nResults - n);
+		line += "," + getResultString("StdDev", nResults - n);
+		line += "," + getResultString("Min", nResults - n);
+		line += "," + getResultString("Max", nResults - n);
+		line += "," + getResultString("Median", nResults - n);
+		line += "," + getResultString("File", nResults - n);
+		line += "," + getResultString("Description", nResults - n);
+		line += "," + getResultString("Coefficient of Variation", nResults - n);
 		
-		line += ", " + score;
-		line += ", " + signoimean;
-		line += ", " + signoimedian;
-		line += ", " + sigrel;
-		line += ", " + noirel;
-		line += ", " + spot_count;
-		line += ", " + filtered_spots;
-		line += ", " + maxima;
+		line += "," + score;
+		line += "," + signoimean;
+		line += "," + signoimedian;
+		line += "," + sigrel;
+		line += "," + noirel;
+		line += "," + spot_count;
+		line += "," + filtered_spots;
+		line += "," + maxima;
 		if (expansion_method == "Force Polygon") line += ", Polygon";
 		if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) line += ", Polygon";
 		if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
 		if (expansion_method == "Gaussian") line += ", Gaussian";
-		line += ", " + warnings;
+		line += "," + warnings;
 		print("[SNR]", line);
 		line = "";
 		}
 	
 	if (boo == 2) {//Print Bright line of Raw
 		line += getResultString("Area", nResults - n + 1);
-		line += ", " + getResultString("Mean", nResults - n + 1);
-		line += ", " + getResultString("StdDev", nResults - n + 1);
-		line += ", " + getResultString("Min", nResults - n + 1);
-		line += ", " + getResultString("Max", nResults - n + 1);
-		line += ", " + getResultString("Median", nResults - n + 1);
-		line += ", " + getResultString("File", nResults - n + 1);
-		line += ", " + getResultString("Description", nResults - n + 1);
-		line += ", " + getResultString("Coefficient of Variation", nResults - n + 1);
+		line += "," + getResultString("Mean", nResults - n + 1);
+		line += "," + getResultString("StdDev", nResults - n + 1);
+		line += "," + getResultString("Min", nResults - n + 1);
+		line += "," + getResultString("Max", nResults - n + 1);
+		line += "," + getResultString("Median", nResults - n + 1);
+		line += "," + getResultString("File", nResults - n + 1);
+		line += "," + getResultString("Description", nResults - n + 1);
+		line += "," + getResultString("Coefficient of Variation", nResults - n + 1);
 		
-		line += ", " + score_bright;
-		line += ", " + signoimean_bright;
-		line += ", " + signoimedian_bright;
-		line += ", " + sigrel_bright;
+		line += "," + score_bright;
+		line += "," + signoimean_bright;
+		line += "," + signoimedian_bright;
+		line += "," + sigrel_bright;
 		print("[SNR]", line);
 		line = "";
 		}
 	
 	{ //Print Cell Noise Line of Raw
 		line += getResultString("Area", nResults - 2);
-		line += ", " + getResultString("Mean", nResults - 2);
-		line += ", " + getResultString("StdDev", nResults - 2);
-		line += ", " + getResultString("Min", nResults - 2);
-		line += ", " + getResultString("Max", nResults - 2);
-		line += ", " + getResultString("Median", nResults - 2);
-		line += ", " + getResultString("File", nResults - 2);
-		line += ", " + getResultString("Description", nResults - 2);
-		line += ", " + getResultString("Coefficient of Variation", nResults - 2);
+		line += "," + getResultString("Mean", nResults - 2);
+		line += "," + getResultString("StdDev", nResults - 2);
+		line += "," + getResultString("Min", nResults - 2);
+		line += "," + getResultString("Max", nResults - 2);
+		line += "," + getResultString("Median", nResults - 2);
+		line += "," + getResultString("File", nResults - 2);
+		line += "," + getResultString("Description", nResults - 2);
+		line += "," + getResultString("Coefficient of Variation", nResults - 2);
 		print("[SNR]", line);
 		line = "";
 		}
 	
 	{ //Print Background Line of Raw
 		line += getResultString("Area", nResults - 1);
-		line += ", " + getResultString("Mean", nResults - 1);
-		line += ", " + getResultString("StdDev", nResults - 1);
-		line += ", " + getResultString("Min", nResults - 1);
-		line += ", " + getResultString("Max", nResults - 1);
-		line += ", " + getResultString("Median", nResults - 1);
-		line += ", " + getResultString("File", nResults - 1);
-		line += ", " + getResultString("Description", nResults - 1);
-		line += ", " + getResultString("Coefficient of Variation", nResults - 1);
+		line += "," + getResultString("Mean", nResults - 1);
+		line += "," + getResultString("StdDev", nResults - 1);
+		line += "," + getResultString("Min", nResults - 1);
+		line += "," + getResultString("Max", nResults - 1);
+		line += "," + getResultString("Median", nResults - 1);
+		line += "," + getResultString("File", nResults - 1);
+		line += "," + getResultString("Description", nResults - 1);
+		line += "," + getResultString("Coefficient of Variation", nResults - 1);
 		print("[SNR]", line);
 		line = "";
 		}
@@ -1703,21 +1705,21 @@ function SNR_save_results(boo) { //Save Results to Window
 	{ //Print Condensed line
 		line += getResultString("File", nResults - n);
 		line += ", " + score;
-		if (boo != 1) line += ", " + score_bright;
-		line += ", " + signoimean;
-		line += ", " + signoimedian;
-		if (boo != 1) line += ", " + signoimedian_bright;
-		line += ", " + sigrel;
-		if (boo != 1) line += ", " + sigrel_bright;
-		line += ", " + noirel;
-		line += ", " + spot_count;
-		line += ", " + filtered_spots;
-		line += ", " + maxima;
+		if (boo != 1) line += "," + score_bright;
+		line += "," + signoimean;
+		line += "," + signoimedian;
+		if (boo != 1) line += "," + signoimedian_bright;
+		line += "," + sigrel;
+		if (boo != 1) line += "," + sigrel_bright;
+		line += "," + noirel;
+		line += "," + spot_count;
+		line += "," + filtered_spots;
+		line += "," + maxima;
 		if (expansion_method == "Force Polygon") line += ", Polygon";
 		if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) line += ", Polygon";
 		if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
 		if (expansion_method == "Gaussian") line += ", Gaussian";
-		line += ", " + warnings;
+		line += "," + warnings;
 		print("[Condense]", line);
 		line = "";
 		}
