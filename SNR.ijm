@@ -1,11 +1,9 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.0"; //Beta Version
-
-//Add total time elapsed
+version = "1.1"; //Beta Version
 
 /*
-Latest Version Date: 2015-8-27
+Latest Version Date: 2015-10-9
 Written by Trevor Okamoto, Research Associate, Stellaris R&D. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
@@ -25,7 +23,7 @@ Copyright (C) 2015 Trevor Okamoto, LGC Biosearch Technologies
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-Tested on ImageJ version 1.49v
+Tested on ImageJ version 1.50c
 Not Compatible with 1.49n
 */
 
@@ -95,6 +93,7 @@ user_area = false; //Check for user defined area
 user_area_rev = false; //Check if to invert selection
 debug_switch = false; //Enables all debug options
 custom_lut = false; //Assign lut values to images
+ztrim = false; //Trim z-stack
 
 //Advanced Options
 advanced = false;
@@ -142,7 +141,7 @@ Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tole
 Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
 Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
-Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut));
+Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim));
 Dialog.show();
 
 //Retrieve Choices
@@ -157,6 +156,7 @@ user_area = Dialog.getCheckbox();
 filter = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
 custom_lut = Dialog.getCheckbox();
+ztrim = Dialog.getCheckbox();
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
 
@@ -262,11 +262,11 @@ print("[SNR]", table_head);
 print("[Condense]", table_head);
 
 //Write Table Labels
-table_head = "Area,Mean,StdDev,Min,Max,Median,File,Description,Coefficient of Variation,Score,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+table_head = "Area,Mean,StdDev,Min,Max,Median,File,Description,Coefficient of Variation,Signal - Noise,Score,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
 if (warning_disable == false) table_head += ",Warning Code";
 print("[SNR]", table_head);
 
-if (filter == true) table_head = "File,Score,Bright Score,Mean SNR,Median SNR,Bright Median SNR,Signal,Bright Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+if (filter == true) table_head = "File,Bright Signal - Noise,Signal - Noise,Score,Bright Score,Mean SNR,Median SNR,Bright Median SNR,Signal,Bright Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
 else table_head = "File,Score,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
 if (warning_disable == false) table_head += ",Warning Code";
 print("[Condense]", table_head);
@@ -292,7 +292,9 @@ if (output_location == false) outDir = inDir + output + File.separator; //Create
 else outDir = getDirectory("Choose Directory where the output files should be saved") + output + File.separator;
 File.makeDirectory(outDir); //Create base output inDirectory
 outDir = outDir + output_name + File.separator;//Create specific output inDirectory
+textDir = outDir + "Saved data" + File.separator;
 File.makeDirectory(outDir); //Create specific output inDirectory
+File.makeDirectory(textDir);
 mergeDir = inDir + "Out-Merged Images" + File.separator;
 if (plot == true) File.makeDirectory(outDir + "Plots" + File.separator); //Create Plots inDirectory
 tif_ready = File.exists(mergeDir + "log.txt");
@@ -390,10 +392,14 @@ function SNR_main(dir, sub) {
 			stripath = replace(substring(path, 0, lastIndexOf(path, ".")), "\\", "_");
 			stripath = replace(stripath, "/", "_");
 			reduced_cardinal = false;
-			//if (File.exists(outDir + stripath + "_Merge.tif") && recreate_tif == false) { //If file was already analyzed with the current version and settings don't do anything
-			//	print("File already analyzed with current version and settings... Skipping");
-			//	}
-			if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") && File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") && recreate_tif == false) { //If tif Files exist
+			//If file already analyzed with the current version and settings, SKIP
+			if (File.exists(textDir + stripath + "_Raw.csv") && File.exists(textDir + stripath + "_Condense.csv") && recreate_tif == false) {
+				print("File already analyzed with current version and settings... Skipping");
+				print("[SNR]", File.openAsString(textDir + stripath + "_Raw.csv"));
+				print("[Condense]", File.openAsString(textDir + stripath + "_Condense.csv"));
+				}
+			//If max median are present, use them instead
+			else if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") && File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") && recreate_tif == false) { //If tif Files exist
 				if (debug_switch) print(dir + list[i]); //Debug
 				open(mergeDir + "Max" + File.separator + stripath + ".tif"); //Open Max
 				window_MaxIP = getImageID();
@@ -414,43 +420,89 @@ function SNR_main(dir, sub) {
 					run("Sharpen");
 					}
 				}
-			else if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif")) { //For raw files
-				if (endsWith(list[i], ".nd2")) { //Open Metadata first to see if it's DAPI
-					run("Bio-Formats Importer", "open=[" + dir + path + "] display_metadata view=[Metadata only]");
-					selectWindow("Original Metadata - " + list[i]);
-					saveAs("Text", inDir + "temp.txt");
-					run("Close");
-					info = File.openAsString(inDir + "temp.txt");
-					if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";
-					else if (indexOf(info, "Name	Cy3.5") > -1) channel = "Cy3.5";
-					else if (indexOf(info, "Name	Cy5.5") > -1) channel = "Cy5.5";
-					else if (indexOf(info, "Name	FITC") > -1) channel = "FITC";
-					if (indexOf(info, "Name	DAPI") == -1) {
-						run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale view=Hyperstack");
+			//For raw files
+			else if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif")) {
+				run("Bio-Formats Importer", "open=[" + dir + path + "] display_metadata view=[Metadata only]");
+				selectWindow("Original Metadata - " + list[i]);
+				saveAs("Text", inDir + "temp.txt");
+				run("Close");
+				info = File.openAsString(inDir + "temp.txt");
+				if (indexOf(info, "Dimensions	XY(") > -1 && indexOf(info, "C=") == -1) { //If multidimension and hasn't been split
+					print("Multi-dimension file detected, splitting");
+					run("Bio-Formats Importer", "open=[" + dir + path + "] color_mode=Grayscale open_all_series split_channels view=Hyperstack stack_order=XYCZT use_virtual_stack");
+					File.makeDirectory(dir + "\\Split Files\\");
+					print("Saving Splits");
+					do {
+						selectImage(1);
+						saveAs("tif", dir + "\\Split Files\\" + getTitle() + ".tif");
+						close;
+						print(nImages + " remaining");
+						} while (nImages >= 0);
+					//exit("This Macro is only compatible with files that contain a single Z-stack.\nYour file has been split\nPlease restart the program.");
+					}
+				else { //If not multidimension or has been split assign channel
+					if (indexOf(info, "Name	Cy3") > -1 || indexOf(info, "C=3") > -1) channel = "Cy3";						
+					else if (indexOf(info, "Name	Cy3.5") > -1 || indexOf(info, "C=2") > -1) channel = "Cy3.5";
+					else if (indexOf(info, "Name	Cy5.5") > -1 || indexOf(info, "C=1") > -1) channel = "Cy5.5";
+					else if (indexOf(info, "Name	FITC") > -1 || indexOf(info, "C=4") > -1) channel = "FITC";
+					else if (indexOf(info, "Name	DAPI") > -1 || indexOf(info, "C=0") > -1) channel = "DAPI";
+					if (channel != "DAPI") {
+						run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale split_channels view=Hyperstack stack_order=XYCZT");
 						window_raw = getImageID();
+						if (nSlices == 1) {
+							close();
+							window_raw = 0;
+							print("Images must have more than one slice");
+							img_files--;
+							img_skip++;
+							}
 						}
-					else {
+					else if (channel == "DAPI"){
 						print("Skipping DAPI channel");
 						img_files--;
 						img_skip++;
-						}
-					}
-				else if (endsWith(list[i], ".tif")) {
-					open(dir + path);
-					window_raw = getImageID();
-					channel = getMetadata("Info");
-					if (nSlices == 1) {
-						close();
 						window_raw = 0;
-						print("Tiff files must have more than one slice");
-						img_files--;
-						img_skip++;
 						}
 					}
 				if (window_raw != 0) { //Initialize Image if opened
 					height = getHeight();
 					width = getWidth();
-					run("Z Project...", "projection=[Max Intensity]"); //Max intensity merge
+					z_min = 1;
+					z_max = nSlices;
+					if (ztrim == true) { //Remove excess slices via find edges
+						run("Duplicate...", "duplicate");
+						run("Find Edges", "stack");
+						edge = newArray();
+						for (m = 1; m <= nSlices; m++) {
+							setSlice(m);
+							run("Measure");
+							edge = Array.concat(edge, getResult("Max", nResults - 1));
+							}
+						run("Clear Results");
+						
+						//Move inward from bottom edge, trigger at 20% increase from moving average
+						edge_avgarr = newArray();
+						z_min = 0;
+						do {
+							edge_avgarr = Array.concat(edge_avgarr, edge[z_min]);
+							Array.getStatistics(edge_avgarr, dumb, dumb, edge_avg, dumb);
+							z_min++;
+							} while (z_min < nSlices && (edge[z_min]/edge_avg < 1.2 || z_min < 3));
+						if (z_min > nSlices/2) z_min = 0; //algorithm likely messed up or there is no signal
+						
+						edge_avgarr = newArray();
+						z_max = nSlices - 1;
+						do {
+							edge_avgarr = Array.concat(edge_avgarr, edge[z_max]);
+							Array.getStatistics(edge_avgarr, dumb, dumb, edge_avg, dumb);
+							z_max--;
+							} while (z_max > 1 && (edge[z_max]/edge_avg < 1.2 || z_max > nSlices - 4));
+						if (z_max < nSlices/2) z_max = nSlices; //algorithm likely messed up or there is no signal
+						close;
+						print("Z Project range: " + z_min + " - " + z_max);
+						}
+					selectImage(window_raw);
+					run("Z Project...", "start=" + z_min + " stop=" + z_max + " projection=[Max Intensity]"); //Max intensity merge
 					window_MaxIP = getImageID();
 					run("Duplicate...", " ");
 					window_Subtract = getImageID();
@@ -1146,7 +1198,6 @@ function SNR_noise() { //Measures Cell Noise
 	roiManager("AND"); //Select regions of Cell Noise
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
-	
 	}//End of Noise function
 
 function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, position 0
@@ -1554,11 +1605,13 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	signoimedian = 0;
 	cv = 0;
 	score = 0;
+	signoi = 0;
 	
 	sigrel_bright = 0;
 	signoimean_bright = 0;
 	signoimedian_bright = 0;
 	score_bright = 0;
+	signoi_bright = 0;
 	n = 3;
 	if (boo == 2) {
 		n = 4;
@@ -1567,6 +1620,7 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 		noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
 		signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 		score_bright = signoimedian_bright * (log(sigrel_bright-noirel_bright)/log(10) - 1);
+		signoi_bright = getResult("Median", nResults - n + 1) - getResult("Median", nResults - 2);
 		}
 	
 	signoimean = (getResult("Mean", nResults - n) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -1575,6 +1629,7 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - n) / getResult("Mean", nResults - n); //Coefficient of Variation - Signal
 	score = signoimedian * (log(sigrel-noirel)/log(10) - 1);
+	signoi = getResult("Median", nResults - n) - getResult("Median", nResults - 2);
 
 	/*
 	Warning Codes
@@ -1596,6 +1651,7 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 		signoimean = 0;
 		signoimedian = 0;
 		score = 0;
+		signoi = 0;
 		warnings += 8;
 		}
 	for (m = 1; m <= 2; m++) { //If the Coefficient of Variation for Noise or Background is greater than 0.2(default) then warn user
@@ -1613,11 +1669,12 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright, score, score_bright);
 	}
 
-function SNR_save_results(boo) { //Save Results to Window
+function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Save individual results
 	//boo = 1: Results
 	//boo = 2: Bright
 	//boo = 3: Bright_Null
 	line = "";
+	comb = "";
 	
 	n = 3;
 	if (boo == 2) n = 4;
@@ -1625,7 +1682,6 @@ function SNR_save_results(boo) { //Save Results to Window
 		setResult("Coefficient of Variation", nResults - m, getResult("StdDev", nResults - m) / getResult("Mean", nResults - m));
 		}
 	updateResults();
-	
 	
 	{//Print First line of Raw
 		line += getResultString("Area", nResults - n);
@@ -1638,6 +1694,7 @@ function SNR_save_results(boo) { //Save Results to Window
 		line += "," + getResultString("Description", nResults - n);
 		line += "," + getResultString("Coefficient of Variation", nResults - n);
 		
+		line += "," + signoi;
 		line += "," + score;
 		line += "," + signoimean;
 		line += "," + signoimedian;
@@ -1652,6 +1709,7 @@ function SNR_save_results(boo) { //Save Results to Window
 		if (expansion_method == "Gaussian") line += ", Gaussian";
 		line += "," + warnings;
 		print("[SNR]", line);
+		comb = line;
 		line = "";
 		}
 	
@@ -1666,11 +1724,13 @@ function SNR_save_results(boo) { //Save Results to Window
 		line += "," + getResultString("Description", nResults - n + 1);
 		line += "," + getResultString("Coefficient of Variation", nResults - n + 1);
 		
+		line += "," + signoi_bright;
 		line += "," + score_bright;
 		line += "," + signoimean_bright;
 		line += "," + signoimedian_bright;
 		line += "," + sigrel_bright;
 		print("[SNR]", line);
+		comb += "\n" + line;
 		line = "";
 		}
 	
@@ -1685,6 +1745,7 @@ function SNR_save_results(boo) { //Save Results to Window
 		line += "," + getResultString("Description", nResults - 2);
 		line += "," + getResultString("Coefficient of Variation", nResults - 2);
 		print("[SNR]", line);
+		comb += "\n" + line;
 		line = "";
 		}
 	
@@ -1699,12 +1760,15 @@ function SNR_save_results(boo) { //Save Results to Window
 		line += "," + getResultString("Description", nResults - 1);
 		line += "," + getResultString("Coefficient of Variation", nResults - 1);
 		print("[SNR]", line);
+		comb += "\n" + line;
 		line = "";
 		}
 	
 	{ //Print Condensed line
 		line += getResultString("File", nResults - n);
-		line += ", " + score;
+		if (boo != 1) line += "," + signoi_bright;
+		line += "," + signoi;
+		line += "," + score;
 		if (boo != 1) line += "," + score_bright;
 		line += "," + signoimean;
 		line += "," + signoimedian;
@@ -1721,8 +1785,12 @@ function SNR_save_results(boo) { //Save Results to Window
 		if (expansion_method == "Gaussian") line += ", Gaussian";
 		line += "," + warnings;
 		print("[Condense]", line);
-		line = "";
 		}
+	
+	//Save Info
+	File.saveString(line, textDir + stripath + "_Condense.csv");
+	File.saveString(comb, textDir + stripath + "_Raw.csv");
+	line = "";
 	run("Clear Results");
 	}
 
