@@ -1,29 +1,15 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2"; //Beta Version
+version = "1.2.1"; //Beta Version
 
 /*
-Latest Version Date: 2015-10-9
-Written by Trevor Okamoto, Research Associate, Stellaris R&D. Biosearch Technologies Inc.
+Latest Version Date: 2015-12-16
+Written by Trevor Okamoto, Product Specialist II, Stellaris. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
 Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
-Copyright (C) 2015 Trevor Okamoto, LGC Biosearch Technologies
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-Tested on ImageJ version 1.50c
+Tested on ImageJ version 1.50e
 Not Compatible with 1.49n
 */
 
@@ -93,7 +79,8 @@ user_area = false; //Check for user defined area
 user_area_rev = false; //Check if to invert selection
 debug_switch = false; //Enables all debug options
 custom_lut = false; //Assign lut values to images
-ztrim = true; //Trim z-stack
+ztrim = false; //Trim z-stack
+background_method = 1; //Background method
 
 //Advanced Options
 advanced = false;
@@ -138,18 +125,14 @@ area_cutoff_bright = 5.22; //Area (micron^2) the bright selection must be to be 
 //Dialog
 Dialog.create("Spot Processor");
 
-Dialog.addMessage("Please enter the Bounding Stringency, Upward Stringency and Maxima Tolerance");
-Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tolerance_bounding);
-Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
-Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
+
+Dialog.addChoice("Background Masking Option:", newArray("Inverse of Noise", "Histogram Peak", "Gaussian Histogram Peak", "Bottom 10%"));
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
 Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim));
 Dialog.show();
 
 //Retrieve Choices
-tolerance_bounding = Dialog.getNumber();
-tolerance_upward = Dialog.getNumber();
-tolerance_maxima = Dialog.getNumber();
+background_method_temp = Dialog.getChoice();
 expansion_method = Dialog.getChoice();
 sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
@@ -159,17 +142,13 @@ filter = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
 custom_lut = Dialog.getCheckbox();
 ztrim = Dialog.getCheckbox();
+
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
-
-//Warn if Choices are outside of recommended range
-if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 15 || tolerance_maxima < 2) {
-	Dialog.create("Warning");
-	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
-	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.4 - 0.8  (" + tolerance_upward + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
-	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
-	Dialog.show();
-	}
+if (background_method_temp == "Inverse of Noise") background_method = 1;
+else if (background_method_temp == "Histogram Peak") background_method = 2;
+else if (background_method_temp == "Gaussian Histogram Peak") background_method = 3;
+else if (background_method_temp == "Bottom 10%") background_method = 4;
 
 if (custom_lut == true) {
 	Dialog.create("Separate LUT");
@@ -206,6 +185,9 @@ if (advanced == true) { //Advanced Options Dialog
 	//waitForUser("Some advanced options will break the macro\nOnly change settings if you know what you're doing\n\nSome settings have not been fully implemented yet and are placeholders at the moment");
 	
 	Dialog.create("Advanced Options");
+	Dialog.addSlider("Bounding Stringency(Higher = smaller spots):", 0.01, 0.5, tolerance_bounding);
+	Dialog.addSlider("Upward Stringency(Higher = smaller spots):", 0, 1, tolerance_upward);
+	Dialog.addSlider("Maxima Tolerance(Higher = More Spots):", 1, 50, tolerance_maxima);
 	Dialog.addString("Output Folder Name:", output);
 	Dialog.addString("Exclude Files and Folders:", exclude);
 	Dialog.addSlider("Starting Maxima:", 0, 200, maxima);
@@ -226,8 +208,10 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Filtered Spot Ratio", 0, 1, warning_badspot);
 	Dialog.show();
 	
+	tolerance_bounding = Dialog.getNumber();
+	tolerance_upward = Dialog.getNumber();
+	tolerance_maxima = Dialog.getNumber();
 	output = Dialog.getString();
-	
 	exclude = Dialog.getString();
 	maxima = Dialog.getNumber();
 	tolerance_drop = Dialog.getNumber();
@@ -256,6 +240,15 @@ output = output + "Beta_" + version; //Change output folder to include version n
 
 if (rsquare == true && filter == false) filter = getBoolean("Linear Fit Maxima Search works best with \"Signal Filtering\".\nEnable \"Signal Filtering?\""); //Check for filtering and linear fit maxima search
 
+//Warn if Choices are outside of recommended range
+if (tolerance_bounding > 0.3 || tolerance_bounding < 0.2 || tolerance_upward < 0.4 || tolerance_upward > 0.8|| tolerance_maxima > 15 || tolerance_maxima < 2) {
+	Dialog.create("Warning");
+	Dialog.addMessage("One or more of your variables are outside of the recommended ranges.\nPlease refer to the recommended ranges below.");
+	Dialog.addMessage("Bounding Stringency: 0.2 - 0.3  (" + tolerance_bounding + ")\nUpward Stringency: 0.4 - 0.8  (" + tolerance_upward + ")\nMaxima Stringency: 2 - 10  (" + tolerance_maxima + ")");
+	Dialog.addMessage("If you would like to continue using these variables press \"OK\" to continue\nBe sure to check the merged tif files and warning codes in the results file to ensure the analysis was done correctly");
+	Dialog.show();
+	}
+
 //Open Tables
 run("Table...", "name=SNR width=400 height=200");
 if (peak_intensity == true) run("Table...", "name=Peak width=40 height=200");
@@ -263,7 +256,7 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Write table headers
-table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method; //-----Add maxima search method-----
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method + " " + background_method_temp; //-----Add maxima search method-----
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
@@ -283,7 +276,7 @@ if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
-output_name = "Results " + expansion_method + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
+output_name = "Results " + expansion_method + " " + background_method_temp + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
 if (ztrim == true) output_name += " Trimmed";
 if (pass_snr != 4 || pass_signoi != 200) output_name += " CustomPass"
@@ -458,12 +451,14 @@ function SNR_main(dir, sub) {
 						}
 					//Move multidimension file to separate folder
 					File.makeDirectory(dir + File.separator + "Multi-dimension Files" + File.separator);
-					File.rename(dir + path, dir + File.separator + "Multi-dimension Files" + File.separator + stripath);
+					File.rename(dir + path, dir + File.separator + "Multi-dimension Files" + File.separator + path);
+					list = getFileList(dir + sub);
+					i = 0;
 					//exit("This Macro is only compatible with files that contain a single Z-stack.\nYour file has been split\nPlease restart the program.");
 					}
 				else { //If not multidimension or has been split, assign channel
 					channel = "Unknown";
-					if (indexOf(info, "SizeC	1") > -1) { //If not ND acquisition 
+					if (indexOf(info, "uiGroupCount	1") > -1) { //If not ND acquisition 
 						if (indexOf(info, "Name	FITC") > -1) channel = "FITC";
 						if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";						
 						if (indexOf(info, "Name	Cy3.5") > -1) channel = "Cy3.5";
@@ -471,14 +466,16 @@ function SNR_main(dir, sub) {
 						if (indexOf(info, "Name	DAPI") > -1) channel = "DAPI";
 						}
 					else { //If ND acquisition
-						channel_num = parseInt(substring(info, indexOf(info, "SizeC"), indexOf(info, "SizeC") + 7)); //Get number of channels
+						temp = indexOf(info, "uiGroupCount");
+						channel_num = parseInt(substring(info, temp + 12, temp + 16));
+						print("Number of Channels Detected: " + channel_num);
 						for (n = 0; n < channel_num; n++) { //Find what C=n this image is
 							if (indexOf(info, "C=" + n) > -1) { //Once you find what C=n this image is, find what filter is associated with that n (Filter #n+1)
-								if (indexOf(info, "Turret1) #" + n + 1 + "	1" )) channel = "DAPI";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	2" )) channel = "FITC";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	3" )) channel = "Cy3";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	4" )) channel = "Cy3.5";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	5" )) channel = "Cy5.5";
+								if (indexOf(info, "Turret1) #" + n + 1 + "	1" ) > -1) channel = "DAPI";
+								else if (indexOf(info, "Turret1) #" + n + 1 + "	2" ) > -1) channel = "FITC";
+								else if (indexOf(info, "Turret1) #" + n + 1 + "	3" ) > -1) channel = "Cy3";
+								else if (indexOf(info, "Turret1) #" + n + 1 + "	4" ) > -1) channel = "Cy3.5";
+								else if (indexOf(info, "Turret1) #" + n + 1 + "	5" ) > -1) channel = "Cy5.5";
 								}
 							}
 						}
@@ -627,7 +624,7 @@ function SNR_main(dir, sub) {
 				}
 			
 			//Get Median Background Level
-			SNR_background();
+			SNR_background(background_method);
 			roiManager("Deselect");
 			roiManager("Select", 1);
 			roiManager("Delete");
@@ -926,7 +923,13 @@ function SNR_main(dir, sub) {
 				if (area_reg > area_cutoff) {
 					selectImage(window_reg_signal); 
 					run("Create Selection");
-					roiManager("Add");
+					if (selectionType() != -1) {
+						roiManager("Add");
+						}
+					else {
+						makeSelection("point", 0, 0);
+						roiManager("Add");
+						}
 					run("Make Inverse");
 					roiManager("Add");
 					selectImage(window_reg_signal);
@@ -948,7 +951,13 @@ function SNR_main(dir, sub) {
 					if (area_bright > area_cutoff_bright) {
 						selectImage(window_high_signal);
 						run("Create Selection");
-						roiManager("Add");
+						if (selectionType() != -1) {
+							roiManager("Add");
+							}
+						else {
+							makeSelection("point", 0, 0);
+							roiManager("Add");
+							}
 						run("Make Inverse");
 						roiManager("Add");
 						selectImage(window_high_signal);
@@ -995,7 +1004,7 @@ function SNR_main(dir, sub) {
 				updateResults();
 				
 				//Run Background
-				SNR_background();
+				SNR_background(background_method);
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Background");
 				updateResults();
@@ -1006,7 +1015,13 @@ function SNR_main(dir, sub) {
 				if (filtered_spots > 0) print(filtered_spots + " points ignored");
 				selectImage(window_signal);
 				run("Create Selection");
-				roiManager("Add"); //Create Signal selection
+				if (selectionType() != -1) {
+					roiManager("Add");
+					}
+				else {
+					makeSelection("point", 0, 0);
+					roiManager("Add");
+					} //Create Signal selection
 				run("Make Inverse"); //Make selection inverted
 				roiManager("Add"); //Create Inverse Signal selection
 				
@@ -1026,7 +1041,7 @@ function SNR_main(dir, sub) {
 				updateResults();
 				
 				//Run Background
-				SNR_background();
+				SNR_background(background_method);
 				setResult("File", nResults - 1, path);
 				setResult("Description", nResults - 1, "Background");
 				updateResults();
@@ -1212,7 +1227,15 @@ function SNR_main(dir, sub) {
 	return final_file_list;
 	} //end of main function
 
-function SNR_background() { //Measures background, the darkest part, where there are no cells
+function SNR_background(choice) {
+	if (choice == 1) SNR_background1();
+	else if (choice == 2) SNR_background2();
+	else if (choice == 3) SNR_background3();
+	else if (choice == 4) SNR_background4();
+	else exit("Background Choice Error");
+	}
+
+function SNR_background1() { //Measures background, inverse of noise in median image
 	selectImage(window_Median);
 	run("Duplicate...", " ");
 	run("8-bit");
@@ -1220,15 +1243,101 @@ function SNR_background() { //Measures background, the darkest part, where there
 	roiManager("Select", 0);
 	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0"); //Local Threshold Background
 	run("Create Selection");
-	run("Enlarge...", "enlarge=1 pixel");
-	run("Enlarge...", "enlarge=-16 pixel");
-	roiManager("Add");
+	run("Enlarge...", "enlarge=-15 pixel");
+	if (selectionType() != -1) {
+		roiManager("Add");
+		}
+	else {
+		makeSelection("point", 0, 0);
+		roiManager("Add");
+		}
 	close();
 	selectImage(window_Median);
 	roiManager("Select", newArray(0, roiManager("Count") - 1));
+	roiManager("AND");
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results
 	} //End of Function
+
+function SNR_background2() { //Peak histogram
+	selectImage(window_Median);
+	run("Duplicate...", " ");
+	run("Select None");
+	roiManager("Select", 0);
+	getMinAndMax(min, max);
+	values = newArray();
+	counts = newArray();
+	max_v = 0;
+	max_c = 0;
+	getHistogram(values, counts, 64, min, max);
+	for (p = 0; p < values.length/2; p++) {
+		//print("Current Max: " + max_v);
+		//print("Value/Count: " + values[p] + "/" + counts[p]);
+		if (max_c < counts[p]) {
+			max_v = values[p];
+			max_c = counts[p];
+			}
+		}
+	setThreshold(0, max_v);
+	run("Create Selection");
+	if (selectionType() != -1) {
+		roiManager("Add");
+		}
+	else {
+		makeSelection("point", 0, 0);
+		roiManager("Add");
+		}
+	close();
+	selectImage(window_Median);
+	roiManager("Select", newArray(0, roiManager("Count") - 1));
+	roiManager("AND");
+	run("Measure");
+	run("Select None");
+	}
+	
+function SNR_background3() { //Gaussian Fit Peak
+	selectImage(window_Median);
+	run("Duplicate...", " ");
+	run("Select None");
+	roiManager("Select", 0);
+	getMinAndMax(min, max);
+	values = newArray();
+	counts = newArray();
+	getHistogram(values, counts, 128, min, max);
+	Fit.doFit(12, values, counts);
+	//Fit.plot;
+	setThreshold(0, Fit.p(2));
+	run("Create Selection");
+	close();
+	selectImage(window_Median);
+	roiManager("Select", newArray(0, roiManager("Count") - 1));
+	roiManager("AND");
+	run("Measure");
+	run("Select None");
+	}
+
+function SNR_background4() { //Bottom 10%
+	selectImage(window_Median);
+	run("Duplicate...", " ");
+	roiManager("Select", 0);
+	getMinAndMax(min, max);
+	values = newArray();
+	counts = newArray();
+	max_v = 0;
+	max_c = 0;
+	getHistogram(values, counts, 128, min, max);
+	for (p = 0; p < counts.length; p++) max_c += counts[p];
+	max_c = max_c * 0.1;
+	for (p = 0; max_c > 0; p++) max_c = max_c - counts[p];
+	setThreshold(0, values[p]);
+	run("Create Selection");
+	close();
+	selectImage(window_Median);
+	roiManager("Select", newArray(0, roiManager("Count") - 1));
+	roiManager("AND");
+	run("Measure");
+	run("Select None");
+	}
 
 function SNR_noise() { //Measures Cell Noise
 	selectImage(window_Median);
@@ -1238,9 +1347,15 @@ function SNR_noise() { //Measures Cell Noise
 	roiManager("Select", 0);
 	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0 white"); //Local Threshold cell noise
 	run("Create Selection"); //Create selection 2
-	run("Enlarge...", "enlarge=-1 pixel"); //Remove very small selections
-	run("Enlarge...", "enlarge=16 pixel"); //Expand Cell noise boundary; Needed for exceptional images
-	roiManager("Add");
+	run("Enlarge...", "enlarge=-2 pixel"); //Remove very small selections
+	run("Enlarge...", "enlarge=17 pixel"); //Expand Cell noise boundary; Needed for exceptional images
+	if (selectionType() != -1) {
+		roiManager("Add");
+		}
+	else {
+		makeSelection("point", 0, 0);
+		roiManager("Add");
+		}
 	close();
 	selectImage(window_Median);
 	roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
