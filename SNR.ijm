@@ -81,6 +81,7 @@ debug_switch = false; //Enables all debug options
 custom_lut = false; //Assign lut values to images
 ztrim = false; //Trim z-stack
 background_method = 1; //Background method
+reanalysis = true;
 
 //Advanced Options
 advanced = false;
@@ -129,7 +130,7 @@ Dialog.create("Spot Processor");
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Peaks"));
 Dialog.addChoice("Noise Masking Option:", newArray("Normal", "None"));
 Dialog.addChoice("Background Masking Option:", newArray("Inverse of Noise", "Histogram Peak", "Gaussian Histogram Peak", "Bottom 10%"));
-Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim));
+Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack", "Re-analyze Images"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim, reanalysis));
 Dialog.show();
 
 //Retrieve Choices
@@ -144,6 +145,7 @@ filter = Dialog.getCheckbox();
 advanced = Dialog.getCheckbox();
 custom_lut = Dialog.getCheckbox();
 ztrim = Dialog.getCheckbox();
+reanalysis = Dialog.getCheckbox();
 
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
@@ -403,7 +405,7 @@ function SNR_main(dir, sub) {
 			stripath = replace(stripath, "/", "_");
 			reduced_cardinal = false;
 			//If file already analyzed with the current version and settings, SKIP
-			if (File.exists(savedataDir + stripath + "_Raw.csv") && File.exists(savedataDir + stripath + "_Condense.csv") && File.exists(outDir + stripath + "_Merge.tif") && recreate_tif == false) {
+			if (File.exists(savedataDir + stripath + "_Raw.csv") && File.exists(savedataDir + stripath + "_Condense.csv") && File.exists(outDir + stripath + "_Merge.tif") && reanalysis == false) {
 				print("File already analyzed with current version and settings... Skipping");
 				print("[SNR]", File.openAsString(savedataDir + stripath + "_Raw.csv"));
 				print("[Condense]", File.openAsString(savedataDir + stripath + "_Condense.csv"));
@@ -1164,20 +1166,23 @@ function SNR_main(dir, sub) {
 			
 			//Fill in Noise
 			run("Select None");
+			//setBatchMode('show');
 			if (filter == true && x_values_high.length > 0) {
-				SNR_drawHash(20, 0);
+				SNR_drawHash(15, 0);
 				roiManager("Select", newArray(0,6)); //Background 
 				roiManager("AND");
-				run("Make Inverse");
-				run("Enlarge...", "enlarge=-2 pixel");
-				run("Enlarge...", "enlarge=2 pixel");
-				run("Enlarge...", "enlarge=1 pixel");
-				setColor(85);
-				fill();
-				run("Enlarge...", "enlarge=-1 pixel");
-				setColor(0);
-				fill();
-				run("Select None");
+				//run("Make Inverse");
+				if (selectionType() != -1) {
+					run("Enlarge...", "enlarge=-2 pixel");
+					run("Enlarge...", "enlarge=2 pixel");
+					run("Enlarge...", "enlarge=1 pixel");
+					setColor(85);
+					fill();
+					run("Enlarge...", "enlarge=-1 pixel");
+					setColor(0);
+					fill();
+					run("Select None");
+					}
 				roiManager("Select", newArray(0,2,4,5)); //Noise, inverse of regular signal and bright signal
 				roiManager("AND");
 				setColor(85);
@@ -1210,19 +1215,21 @@ function SNR_main(dir, sub) {
 				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
 			else {
-				SNR_drawHash(20, 0);
+				SNR_drawHash(15, 0);
 				roiManager("Select", newArray(0,4)); //Background 
 				roiManager("AND");
-				run("Make Inverse");
-				run("Enlarge...", "enlarge=-2 pixel");
-				run("Enlarge...", "enlarge=2 pixel");
-				run("Enlarge...", "enlarge=1 pixel");
-				setColor(85);
-				fill();
-				run("Enlarge...", "enlarge=-1 pixel");
-				setColor(0);
-				fill();
-				run("Select None");
+				//run("Make Inverse");
+				if (selectionType() != -1) {
+					run("Enlarge...", "enlarge=-2 pixel");
+					run("Enlarge...", "enlarge=2 pixel");
+					run("Enlarge...", "enlarge=1 pixel");
+					setColor(85);
+					fill();
+					run("Enlarge...", "enlarge=-1 pixel");
+					setColor(0);
+					fill();
+					run("Select None");
+					}
 				roiManager("Select", newArray(0,2,3)); //Noise
 				roiManager("AND");
 				setColor(128);
@@ -1238,6 +1245,7 @@ function SNR_main(dir, sub) {
 					}
 				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + filtered_spots, 10, 40, 'white');
 				}
+			//setBatchMode('hide');
 			run("Select None");
 			if (user_area == true) {
 				setForegroundColor(255, 255, 255);
