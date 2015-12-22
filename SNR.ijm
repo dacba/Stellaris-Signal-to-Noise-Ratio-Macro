@@ -1,9 +1,9 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2.1"; //Beta Version
+version = "1.2.3"; //Beta Version
 
 /*
-Latest Version Date: 2015-12-16
+Latest Version Date: 2015-12-21
 Written by Trevor Okamoto, Product Specialist II, Stellaris. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
@@ -100,7 +100,7 @@ warning_disable = false; //Disable warnings
 exclude = "NULL"; //Will exclude any file or folder containing this string
 filter_low = 2; //Defines the number of standard deviation points below the mean to filter signal
 filter_high = 5; //Defines the number of standard deviation points above the mean to separate signal
-noise_stdev = 3; //Defines the number of standard deviation points above the mean noise value for peak signal to be counted
+noise_stddev = 1; //Defines the number of standard deviation points above the mean noise value for peak signal to be counted
 gauss_offset = 2; //Defines the threshold of standard deviation of the Gaussian fit
 gauss_d = 2; //Number of standard deviations to move outward of Gaussian fit
 np_radii = 9;
@@ -126,14 +126,16 @@ area_cutoff_bright = 5.22; //Area (micron^2) the bright selection must be to be 
 Dialog.create("Spot Processor");
 
 
+Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Peaks"));
+Dialog.addChoice("Noise Masking Option:", newArray("Normal", "None"));
 Dialog.addChoice("Background Masking Option:", newArray("Inverse of Noise", "Histogram Peak", "Gaussian Histogram Peak", "Bottom 10%"));
-Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian"));
 Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim));
 Dialog.show();
 
 //Retrieve Choices
-background_method_temp = Dialog.getChoice();
 expansion_method = Dialog.getChoice();
+noise_method = Dialog.getChoice();
+background_method_temp = Dialog.getChoice();
 sum_intensity = Dialog.getCheckbox();
 peak_intensity = Dialog.getCheckbox();
 plot = Dialog.getCheckbox();
@@ -194,7 +196,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("Tolerance Drop", 0.5, 1, tolerance_drop);
 	Dialog.addSlider("Dim StdDev", 1, 5, filter_low);
 	Dialog.addSlider("Bright StdDev", 1, 5, filter_high);
-	Dialog.addSlider("Signal/Noise StdDev Separation", 0, 5, noise_stdev);
+	Dialog.addSlider("Signal/Noise StdDev Separation", 0, 5, noise_stddev);
 	Dialog.addSlider("Signal Area Cutoff", 0, 10, area_cutoff);
 	Dialog.addSlider("Bright Signal Area Cutoff", 0, 10, area_cutoff_bright);
 	Dialog.addSlider("SNR Requirement", 0, 10, pass_snr);
@@ -217,7 +219,7 @@ if (advanced == true) { //Advanced Options Dialog
 	tolerance_drop = Dialog.getNumber();
 	filter_low = Dialog.getNumber();
 	filter_high = Dialog.getNumber();
-	noise_stdev = Dialog.getNumber();
+	noise_stddev = Dialog.getNumber();
 	area_cutoff = Dialog.getNumber();
 	area_cutoff_bright = Dialog.getNumber();
 	pass_snr = Dialog.getNumber();
@@ -256,17 +258,17 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Write table headers
-table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method + " " + background_method_temp; //-----Add maxima search method-----
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method + " " + noise_method + " " + background_method_temp; //-----Add maxima search method-----
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
 //Write Table Labels
-table_head = "Area,Mean,StdDev,Min,Max,Median,File,Description,Coefficient of Variation,Pass,Signal - Noise,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+table_head = "Area,Mean,StdDev,Min,Max,Median,File,Description,Coefficient of Variation,Pass,S - N,S - N StdDev,Mean SNR,Median SNR,Signal,Signal StdDev,Noise,Noise StdDev,Spots,Filtered Spots,Maxima,Expansion Method";
 if (warning_disable == false) table_head += ",Warning Code";
 print("[SNR]", table_head);
 
-if (filter == true) table_head = "File,Pass,Bright Pass,Signal - Noise,Bright Signal - Noise,Mean SNR,Median SNR,Bright Median SNR,Signal,Bright Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
-else table_head = "File,Pass,Mean SNR,Median SNR,Signal,Noise,Spots,Filtered Spots,Maxima,Expansion Method";
+if (filter == true) table_head = "File,Pass,Bright Pass,S - N,S - N StdDev,Bright S - N,Bright S - N StdDev,Mean SNR,Median SNR,Bright Median SNR,Signal,Signal StdDev,Bright Signal,Bright Signal StdDev,Noise,Noise StdDev,Spots,Filtered Spots,Maxima,Expansion Method";
+else table_head = "File,Pass,S - N,S - N StdDev,Mean SNR,Median SNR,Signal,Signal StdDev,Noise,Noise StdDev,Spots,Filtered Spots,Maxima,Expansion Method";
 if (warning_disable == false) table_head += ",Warning Code";
 print("[Condense]", table_head);
 
@@ -276,8 +278,15 @@ if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
-output_name = "Results " + expansion_method + " " + background_method_temp + " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
-if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stdev;
+
+output_name = "Results";
+if (expansion_method != "Normal") output_name += " " + expansion_method;
+if (noise_method != "Normal") output_name += " " + noise_method;
+if (background_method_temp != "Inverse of Noise") output_name += " " + background_method_temp;
+
+output_name += " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
+
+if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high + "-" + noise_stddev;
 if (ztrim == true) output_name += " Trimmed";
 if (pass_snr != 4 || pass_signoi != 200) output_name += " CustomPass"
 if (rsquare == true) output_name += " LinMaxSearch";
@@ -394,7 +403,7 @@ function SNR_main(dir, sub) {
 			stripath = replace(stripath, "/", "_");
 			reduced_cardinal = false;
 			//If file already analyzed with the current version and settings, SKIP
-			if (File.exists(savedataDir + stripath + "_Raw.csv") && File.exists(savedataDir + stripath + "_Condense.csv") && recreate_tif == false) {
+			if (File.exists(savedataDir + stripath + "_Raw.csv") && File.exists(savedataDir + stripath + "_Condense.csv") && File.exists(outDir + stripath + "_Merge.tif") && recreate_tif == false) {
 				print("File already analyzed with current version and settings... Skipping");
 				print("[SNR]", File.openAsString(savedataDir + stripath + "_Raw.csv"));
 				print("[Condense]", File.openAsString(savedataDir + stripath + "_Condense.csv"));
@@ -557,7 +566,7 @@ function SNR_main(dir, sub) {
 					selectImage(window_raw);
 					run("Z Project...", "projection=Median"); //Median intensity merge
 					window_Median = getImageID();
-					run("Gaussian Blur...", "sigma=3"); //Blur Median
+					//run("Gaussian Blur...", "sigma=3"); //Blur Median
 					selectImage(window_raw);
 					run("Close");
 					}
@@ -637,7 +646,7 @@ function SNR_main(dir, sub) {
 			roiManager("Select", 1);
 			roiManager("Delete");
 			run("Select None");
-			noise_max = getResult("Mean", nResults - 1) + noise_stdev * getResult("StdDev", nResults - 1); //Signal must be brighter than the noise
+			noise_max = getResult("Mean", nResults - 1) + noise_stddev * getResult("StdDev", nResults - 1); //Signal must be brighter than the noise
 			run("Clear Results");
 			
 			//Determine Maxima
@@ -695,6 +704,7 @@ function SNR_main(dir, sub) {
 			y_values = newArray();
 			cardinal = newArray();
 			if (filter == true) { //Get bounds for filter array
+				amplitude_high = newArray();
 				north = newArray();
 				northeast = newArray();
 				east = newArray();
@@ -715,8 +725,10 @@ function SNR_main(dir, sub) {
 				setBatchMode('show');
 				}
 			if (expansion_method == "Gaussian") { //If gaussian is selected run the gaussian fitting
+				amplitude = newArray();
 				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_gauss_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
+					amplitude = Array.concat(amplitude, cardinal[8]);
 					if (filter == true) {
 						north = Array.concat(north, cardinal[0]);
 						northeast = Array.concat(northeast, cardinal[1]);
@@ -745,7 +757,20 @@ function SNR_main(dir, sub) {
 						}
 					} //End of dots loop
 				}
-			else { //Force polygon or if running on normal and less than normal_limit
+			else if (expansion_method == "Peaks") {
+				for (q = 0; q < x_values.length; q++) {
+					cardinal = SNR_peak(x_values[q], y_values[q], window_signal);
+					north = Array.concat(north, 0);
+						northeast = Array.concat(northeast, 0);
+						east = Array.concat(east, 0);
+						southeast = Array.concat(southeast, 0);
+						south = Array.concat(south, 0);
+						southwest = Array.concat(southwest, 0);
+						west = Array.concat(west, 0);
+						northwest = Array.concat(northwest, 0);
+					}
+				}
+			else if (x_values.length <= normal_limit || expansion_method == "Force Polygon"){ //Force polygon or if running on normal and less than normal_limit
 				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
@@ -802,29 +827,16 @@ function SNR_main(dir, sub) {
 					}
 				
 				//Calculate cutoffs
-				temparr = newArray(); //temporary array
-				temparr = Array.copy(mean_intensity); //temp array stores mean_intensity values
-				Array.sort(temparr);
 				med = 0; //median of mean_intensity
+				med = SNR_median(mean_intensity);
+				
+				//Median Absolute Deviation
 				madarr = newArray(); //median absolute deviation array
 				mad = 0;
-				if (temparr.length%2 == 0) { //If even
-					temp = temparr.length/2 - 1;
-					med =(temparr[temp] + temparr[temp+1])/2;
-					}
-				else { //Odd
-					med = temparr[floor(temparr.length/2)];
-					}
-				//Median Absolute Deviation
 				for (q = 0; q < mean_intensity.length; q++) {
 					madarr = Array.concat(madarr, abs(med - mean_intensity[q]));
 					}
-				Array.sort(madarr);
-				if (madarr.length%2 == 0) { //If even
-					temp = madarr.length/2 - 1;
-					mad =(madarr[temp] + madarr[temp+1])/2;
-					}
-				else mad = madarr[floor(madarr.length/2)]; //If odd
+				mad = SNR_median(madarr);
 				
 				made = mad * 1.483;
 				
@@ -885,12 +897,17 @@ function SNR_main(dir, sub) {
 					//print(x_values_high[q], y_values_high[q]);
 					if (expansion_method == "Gaussian") {
 						cardinal = SNR_gauss_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run Gaussian with high xy values
-						
+						amplitude_high = Array.concat(amplitude_high, cardinal[8]);
 						}
-					else if (expansion_method == "Normal" && x_values_high.length < normal_limit) {
-						cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
+					else if (expansion_method == "Normal" && x_values_high.length > normal_limit) {
+						cardinal = SNR_dots(x_values_high[q], y_values_high[q], window_high_signal); //Run poly with high xy values
 						}
-					else cardinal = SNR_dots(x_values_high[q], y_values_high[q], window_high_signal); //Run dots with high xy values
+					else if(expansion_method == "Peaks") {
+						cardinal = SNR_peak(x_values_high[q], y_values_high[q], window_high_signal);
+						}
+					else if (x_values.length <= normal_limit || expansion_method == "Force Polygon") {
+						cardinal = SNR_polygon(x_values_high[q], y_values_high[q], window_high_signal); //Run dots with high xy values
+						}
 					}
 				count_bad = temp;
 				
@@ -903,16 +920,22 @@ function SNR_main(dir, sub) {
 						if (x_values[q] == x_values_high[p] && y_values[q] == y_values_high[p]) found = true;
 						}
 					if (found == false) {
-						cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with new x and y values
+						//cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with new x and y values
 						
 						if (expansion_method == "Gaussian") {
 							cardinal = SNR_gauss_polygon(x_values[q], y_values[q], window_reg_signal); //Run Gaussian with xy values
+							amplitude = Array.concat(amplitude, cardinal[8]);
 							}
-						else if (expansion_method == "Normal" && x_values.length < normal_limit) {
-							cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run poly with xy values
+						else if (expansion_method == "Normal" && x_values.length > normal_limit) {
+							cardinal = SNR_dots(x_values[q], y_values[q], window_reg_signal); //Run poly with xy values
 							}
-						else cardinal = SNR_dots(x_values[q], y_values[q], window_reg_signal); //Run dots with xy values
+						else if(expansion_method == "Peaks") {
+							cardinal = SNR_peak(x_values[q], y_values[q], window_reg_signal);
 							}
+						else if (x_values.length < normal_limit || expansion_method == "Force Polygon") {
+							cardinal = SNR_polygon(x_values[q], y_values[q], window_reg_signal); //Run dots with xy values
+							}
+						}
 					}
 				
 				print(spot_count + " Regular points processed");
@@ -927,7 +950,7 @@ function SNR_main(dir, sub) {
 						roiManager("Add");
 						}
 					else {
-						makeSelection("point", 0, 0);
+						makePoint(0, 0);
 						roiManager("Add");
 						}
 					run("Make Inverse");
@@ -955,7 +978,7 @@ function SNR_main(dir, sub) {
 							roiManager("Add");
 							}
 						else {
-							makeSelection("point", 0, 0);
+							makePoint(0, 0);
 							roiManager("Add");
 							}
 						run("Make Inverse");
@@ -1019,7 +1042,7 @@ function SNR_main(dir, sub) {
 					roiManager("Add");
 					}
 				else {
-					makeSelection("point", 0, 0);
+					makePoint(0, 0);
 					roiManager("Add");
 					} //Create Signal selection
 				run("Make Inverse"); //Make selection inverted
@@ -1052,6 +1075,12 @@ function SNR_main(dir, sub) {
 			if (filter == true && x_values_high.length > 0) array_results = SNR_results(2); //If doing spot by spot and there are bright spots
 			else if (filter == true && x_values_high.length == 0) array_results = SNR_results(3); //If doing spot by spot and there are no bright spots
 			else array_results = SNR_results(1); //If not doing spot by spot
+			
+			for (s = 0; s < array_results.length; s++) { //Round array results
+				if (s <= 1) array_results[s] = round(array_results[s]*100)/100; //except SNR, 0.00 precision
+				else array_results[s] = round(array_results[s]);
+				}
+			
 			
 			//Prep Images
 			selectImage(window_Subtract);
@@ -1109,40 +1138,58 @@ function SNR_main(dir, sub) {
 			if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max" + File.separator + stripath + ".tif"); //Save for future use
 			//print(min, max);
 			//print(min + array_results[2] * 10);
+			//Array_Results(0SNRmedian, 1SNRmedian_bright, 2signal, 3signal_stddev, 4noise, 5noise_stddev, 6signal_bright, 7signal_bright_stddev, 8signoi, 9signoi_stddev, 10signoi_bright, 11signoi_bright_stddev)
 			run("8-bit");
 			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Max 8-bit" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max 8-bit" + File.separator + stripath + ".tif");
 			setForegroundColor(0, 0, 0);
-			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Signal - Noise: " + array_results[0] + "/" + array_results[5] + "\nBright SNR/Bright Signal - Noise: " + array_results[3] + "/" + array_results[6], 10, 40, 'white');
-			else if (filter == true && x_values_high.length == 0) drawString(path + "\nSNR/Signal - Noise: " + array_results[0] + "/" + array_results[5], 10, 40, 'white');
-			else drawString(path + "\nSNR/Signal - Noise: " + array_results[0] + "/" + array_results[3], 10, 40, 'white');
+			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Signal: " + array_results[0] + "/" + array_results[8] + "±" + array_results[9] + "\nBright SNR/Signal: " + array_results[1] + "/" + array_results[10] + "±" + array_results[11], 10, 40, 'white');
+			else drawString(path + "\nSNR/Signal: " + array_results[0] + "/" + array_results[8] + "±" + array_results[9], 10, 40, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
 			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Median" + File.separator + stripath + ".tif");
 			run("8-bit");
-			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[1] + "\nBright Signal: " + array_results[4] + "\nNoise: " + array_results[2], 10, 40, 'white');
-			else drawString("Median\nSignal: " + array_results[1] + "\nNoise: " + array_results[2], 10, 40, 'white');	
+			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[2] + "±" + array_results[3] + "\nBright Signal: " + array_results[6] + "±" + array_results[7] + "\nNoise: " + array_results[4] + "±" + array_results[5], 10, 40, 'white');
+			else drawString("Median\nSignal: " + array_results[2] + "±" + array_results[3] + "\nNoise: " + array_results[4] + "±" + array_results[5], 10, 40, 'white');	
 			
 			//Add Slice with Cell Noise and Signal areas on it
 			selectImage(window_MaxIP);
 			run("Images to Stack", "name=Stack title=[] use");
 			setSlice(1);
 			run("Add Slice");
+			run("Select All");
+			setColor(0);
+			fill;
 			
 			//Fill in Noise
 			run("Select None");
 			if (filter == true && x_values_high.length > 0) {
+				SNR_drawHash(20, 0);
+				roiManager("Select", newArray(0,6)); //Background 
+				roiManager("AND");
+				run("Make Inverse");
+				run("Enlarge...", "enlarge=-2 pixel");
+				run("Enlarge...", "enlarge=2 pixel");
+				run("Enlarge...", "enlarge=1 pixel");
+				setColor(85);
+				fill();
+				run("Enlarge...", "enlarge=-1 pixel");
+				setColor(0);
+				fill();
+				run("Select None");
 				roiManager("Select", newArray(0,2,4,5)); //Noise, inverse of regular signal and bright signal
 				roiManager("AND");
 				setColor(85);
 				fill();
 				run("Select None");
-				roiManager("Select", 1); //Regular Signal
+				roiManager("Select", newArray(0,1)); //Regular Signal
+				roiManager("AND");
 				setColor(170);
 				fill();
 				run("Select None");
-				roiManager("Select", 3); //Bright Signal
+				roiManager("Select", newArray(0,3)); //Bright Signal
+				roiManager("AND");
 				setColor(255);
 				fill();
 				setForegroundColor(5, 5, 5);
@@ -1150,27 +1197,44 @@ function SNR_main(dir, sub) {
 				run("Enlarge...", "enlarge=1 pixel");
 				setForegroundColor(255, 255, 255);
 				run("Draw", "slice");
-				for (q = 0; q < x_values.length && q < 10000; q++) {
-					found = false;
-					for (p = 0; p < low_counter.length; p++) {
-						if (q == low_counter[p]) found = true;
+				if (expansion_method != "Peaks") {
+					for (q = 0; q < x_values.length && q < 10000; q++) {
+						found = false;
+						for (p = 0; p < low_counter.length; p++) {
+							if (q == low_counter[p]) found = true;
+							}
+						if (found == false) setPixel(x_values[q], y_values[q], 200);
 						}
-					if (found == false) setPixel(x_values[q], y_values[q], 200);
 					}
 				setForegroundColor(0, 0, 0);
 				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
 			else {
-				roiManager("Select", newArray(0,2,3));
+				SNR_drawHash(20, 0);
+				roiManager("Select", newArray(0,4)); //Background 
+				roiManager("AND");
+				run("Make Inverse");
+				run("Enlarge...", "enlarge=-2 pixel");
+				run("Enlarge...", "enlarge=2 pixel");
+				run("Enlarge...", "enlarge=1 pixel");
+				setColor(85);
+				fill();
+				run("Enlarge...", "enlarge=-1 pixel");
+				setColor(0);
+				fill();
+				run("Select None");
+				roiManager("Select", newArray(0,2,3)); //Noise
 				roiManager("AND");
 				setColor(128);
 				fill();
 				run("Select None");
-				roiManager("Select", 1);
+				roiManager("Select", 1); //Signal
 				setColor(255);
 				fill();
-				for (q = 0; q < x_values.length && q < 10000; q++) {
-					setPixel(x_values[q], y_values[q], 200);
+				if (expansion_method != "Peaks") {
+					for (q = 0; q < x_values.length && q < 10000; q++) {
+						setPixel(x_values[q], y_values[q], 200);
+						}
 					}
 				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + filtered_spots, 10, 40, 'white');
 				}
@@ -1227,6 +1291,26 @@ function SNR_main(dir, sub) {
 	return final_file_list;
 	} //end of main function
 
+function SNR_drawHash(space, roi) {
+	roiManager("Select", roi);
+	getSelectionBounds(x, y, draw_width, draw_height);
+	setColor(170);
+	start = roiManager("Count");
+	inc = space*2;
+	for (n = 0; n*inc < draw_width+draw_height; n++) {
+		makeLine(x-draw_height+n*inc, y+draw_height, x+n*inc, y);
+		roiManager("Add");
+		}
+	lines = Array.slice(Array.getSequence(roiManager("Count")), start);
+	roiManager("Select", lines);
+	roiManager("OR");
+	roiManager("Add");
+	roiManager("Select", newArray(roi, roiManager("Count")-1));
+	roiManager("AND");
+	fill;
+	run("Select None");
+	}
+
 function SNR_background(choice) {
 	if (choice == 1) SNR_background1();
 	else if (choice == 2) SNR_background2();
@@ -1241,14 +1325,16 @@ function SNR_background1() { //Measures background, inverse of noise in median i
 	run("8-bit");
 	run("Select None");
 	roiManager("Select", 0);
-	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0"); //Local Threshold Background
+	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0 white"); //Local Threshold Background
 	run("Create Selection");
-	run("Enlarge...", "enlarge=-15 pixel");
 	if (selectionType() != -1) {
+		run("Enlarge...", "enlarge=-2 pixel");
+		run("Enlarge...", "enlarge=17 pixel");
+		run("Make Inverse");
 		roiManager("Add");
 		}
 	else {
-		makeSelection("point", 0, 0);
+		makePoint(0, 0);
 		roiManager("Add");
 		}
 	close();
@@ -1281,10 +1367,12 @@ function SNR_background2() { //Peak histogram
 	setThreshold(0, max_v);
 	run("Create Selection");
 	if (selectionType() != -1) {
+	run("Enlarge...", "enlarge=2 pixel");
+	run("Enlarge...", "enlarge=-2 pixel");
 		roiManager("Add");
 		}
 	else {
-		makeSelection("point", 0, 0);
+		makePoint(0, 0);
 		roiManager("Add");
 		}
 	close();
@@ -1308,6 +1396,15 @@ function SNR_background3() { //Gaussian Fit Peak
 	//Fit.plot;
 	setThreshold(0, Fit.p(2));
 	run("Create Selection");
+	if (selectionType() != -1) {
+	run("Enlarge...", "enlarge=2 pixel");
+	run("Enlarge...", "enlarge=-2 pixel");
+		roiManager("Add");
+		}
+	else {
+		makePoint(0, 0);
+		roiManager("Add");
+		}
 	close();
 	selectImage(window_Median);
 	roiManager("Select", newArray(0, roiManager("Count") - 1));
@@ -1331,6 +1428,15 @@ function SNR_background4() { //Bottom 10%
 	for (p = 0; max_c > 0; p++) max_c = max_c - counts[p];
 	setThreshold(0, values[p]);
 	run("Create Selection");
+	if (selectionType() != -1) {
+		run("Enlarge...", "enlarge=2 pixel");
+		run("Enlarge...", "enlarge=-2 pixel");
+		roiManager("Add");
+		}
+	else {
+		makePoint(0, 0);
+		roiManager("Add");
+		}
 	close();
 	selectImage(window_Median);
 	roiManager("Select", newArray(0, roiManager("Count") - 1));
@@ -1345,35 +1451,65 @@ function SNR_noise() { //Measures Cell Noise
 	run("8-bit");
 	run("Select None");
 	roiManager("Select", 0);
-	run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0 white"); //Local Threshold cell noise
-	run("Create Selection"); //Create selection 2
-	run("Enlarge...", "enlarge=-2 pixel"); //Remove very small selections
-	run("Enlarge...", "enlarge=17 pixel"); //Expand Cell noise boundary; Needed for exceptional images
-	if (selectionType() != -1) {
-		roiManager("Add");
+	if (noise_method == "Normal") {
+		run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0 white"); //Local Threshold cell noise
+		run("Create Selection"); //Create selection 2
+		run("Enlarge...", "enlarge=-2 pixel"); //Remove very small selections
+		run("Enlarge...", "enlarge=17 pixel"); //Expand Cell noise boundary; Needed for exceptional images
+		if (selectionType() != -1) {
+			roiManager("Add");
+			}
+		else {
+			makePoint(0, 0);
+			roiManager("Add");
+			}
+		close();
+		selectImage(window_Median);
+		roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
+		roiManager("AND"); //Select regions of Cell Noise
 		}
 	else {
-		makeSelection("point", 0, 0);
 		roiManager("Add");
+		close();
+		selectImage(window_Median);
+		roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
+		roiManager("AND"); //Select regions of Cell Noise
 		}
-	close();
-	selectImage(window_Median);
-	roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
-	roiManager("AND"); //Select regions of Cell Noise
 	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
 	}//End of Noise function
+
+function SNR_median(array) {
+	temparr = newArray(); //temporary array
+	temparr = Array.copy(array); //temp array stores mean_intensity values
+	Array.sort(temparr);
+	if (temparr.length%2 == 0) { //If even
+		temp = temparr.length/2 - 1;
+		return (temparr[temp] + temparr[temp+1])/2;
+		}
+	else { //Odd
+		return temparr[floor(temparr.length/2)];
+		}
+	}
 
 function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, position 0
 	selectImage(window_MaxIP);
 	roiManager("Select", newArray(0, roi));
 	roiManager("AND");
-	//setBatchMode('show');
-	//waitForUser("Check area");
-	//setBatchMode('hide');
 	run("Measure");
-	//Check signal area is above threshold
 	run("Select None");
+	if (expansion_method == "Gaussian") {
+		if (roi == 1) Array.getStatistics(amplitude, s_min, s_max, s_mean, s_stdDev);
+		else if (roi == 3) Array.getStatistics(amplitude_high, s_min, s_max, s_mean, s_stdDev);
+		else exit("Gaussian ROI is incorrect, ROI: " + roi);
+		s_med = SNR_median(amplitude);
+		setResult("Area", nResults - 1, area_cutoff + 1);
+		setResult("Mean", nResults - 1, s_mean);
+		setResult("StdDev", nResults - 1, s_stdDev);
+		setResult("Min", nResults - 1, s_min);
+		setResult("Max", nResults - 1, s_max);
+		setResult("Median", nResults - 1, s_med);
+		}
 	} //End of signal function
 
 function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an ellipse on mask image
@@ -1384,22 +1520,22 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 	//North point
 	pixel = newArray();
 	for (n = 0; n <= np_radii; n++) pixel = Array.concat(pixel, getPixel(xi, yi - n)); //Add pixel value
-	cardinal[0] = SNR_basic_expand(pixel, cap, 1);
+	cardinal[0] = SNR_basic_expand(pixel, 1);
 	
 	//East point
 	pixel = newArray();
 	for (n = 0; n <= np_radii; n++) pixel = Array.concat(pixel, getPixel(xi + n, yi)); //Add pixel value
-	cardinal[1] = SNR_basic_expand(pixel, cap, 1);
+	cardinal[1] = SNR_basic_expand(pixel, 1);
 	
 	//South point
 	pixel = newArray();
 	for (n = 0; n <= np_radii; n++) pixel = Array.concat(pixel, getPixel(xi, yi + n)); //Add pixel value
-	cardinal[2] = SNR_basic_expand(pixel, cap, 1);
+	cardinal[2] = SNR_basic_expand(pixel, 1);
 	
 	//West point
 	pixel = newArray();
 	for (n = 0; n <= np_radii; n++) pixel = Array.concat(pixel, getPixel(xi - n, yi)); //Add pixel value
-	cardinal[3] = SNR_basic_expand(pixel, cap, 1);
+	cardinal[3] = SNR_basic_expand(pixel, 1);
 	
 	if (cap <= 2 || count_bad == true) {
 		selectImage(window);
@@ -1412,6 +1548,14 @@ function SNR_dots(xi, yi, window) { //Searches N, S, E, W and then draws an elli
 		return cardinal;
 		}
 	}//End of dot function
+
+function SNR_peak(xi, yi, window) {
+	cardinal = newArray(0, 0, 0, 0);
+	selectImage(window);
+	makePoint(xi, yi);
+	fill;
+	return cardinal;
+	}
 
 function SNR_gauss_expand(all_pixel) { //Returns number of pixels to expand in a certain direction
 	result = newArray(0, 0, 0);
@@ -1456,7 +1600,9 @@ function SNR_getline(xi, yi, direction, radii) { //Gets line with center of (xi,
 
 function SNR_gauss_polygon(xi, yi, window) {
 	selectImage(window_MaxIP);
-	cardinal = newArray(0, 0, 0, 0, 0, 0, 0, 0);
+	cardinal = newArray(0, 0, 0, 0, 0, 0, 0, 0, 0);
+	amp = 0;
+	amp_div = 0;
 	result = newArray(0, 0);
 	pixel = newArray();
 	cap = 0;
@@ -1466,24 +1612,46 @@ function SNR_gauss_polygon(xi, yi, window) {
 	result = SNR_gauss_expand(pixel);
 	cardinal[0] = result[0] - result[1]*gauss_d;
 	cardinal[4] = result[0] + result[1]*gauss_d;
+	if (result[2] != 0){
+		amp += result[2];
+		amp_div++;
+		}
 	
 	//NW to SE
 	pixel = SNR_getline(xi, yi, 1, np_radii);
 	result = SNR_gauss_expand(pixel);
 	cardinal[7] = result[0] - result[1]*gauss_d;
 	cardinal[3] = result[0] + result[1]*gauss_d;
+	if (result[2] != 0){
+		amp += result[2];
+		amp_div++;
+		}
 	
 	//X-axis
 	pixel = SNR_getline(xi, yi, 2, np_radii);
 	result = SNR_gauss_expand(pixel);
 	cardinal[6] = result[0] - result[1]*gauss_d;
 	cardinal[2] = result[0] + result[1]*gauss_d;
+	if (result[2] != 0){
+		amp += result[2];
+		amp_div++;
+		}
 	
 	//SW to NE
 	pixel = SNR_getline(xi, yi, 3, np_radii);
 	result = SNR_gauss_expand(pixel);
 	cardinal[5] = result[0] - result[1]*gauss_d;
 	cardinal[1] = result[0] + result[1]*gauss_d;
+	if (result[2] != 0){
+		amp += result[2];
+		amp_div++;
+		}
+	
+	if (amp > 0) {
+		amp /= amp_div;
+		cardinal[8] = amp;
+		}
+	else cardinal[8] = 0;
 	
 	//Array.print(Array.concat(xi, yi, result[2], cardinal));
 	
@@ -1758,43 +1926,58 @@ function SNR_length(segments) { //Returns an array with the lengths of the given
 	return segment_len;
 	}
 
+function SNR_stddev(a, b) {
+	return sqrt(pow(a, 2) + pow(b, 2));
+	}
+	
 function SNR_results(boo) { //Calculates base SNR and other base values
 	//boo = 1: Results
 	//boo = 2: Bright
 	//boo = 3: Bright_Null
 	warnings = 0;
-	sigrel = 0;
-	noirel = 0;
-	signoimean = 0;
-	signoimedian = 0;
+	signal = 0;
+	signal_stddev = 0;
+	noise = 0;
+	noise_stddev = 0;
+	SNRmean = 0;
+	SNRmedian = 0;
 	cv = 0;
 	signoi = 0;
+	signoi_stddev = 0;
 	pass = "Fail";
 	
-	sigrel_bright = 0;
-	signoimean_bright = 0;
-	signoimedian_bright = 0;
+	signal_bright = 0;
+	signal_bright_stddev = 0;
+	SNRmean_bright = 0;
+	SNRmedian_bright = 0;
 	signoi_bright = 0;
+	signoi_bright_stddev = 0;
 	pass_bright = "NA";
 	n = 3;
 	if (boo == 2) {
 		n = 4;
-		signoimean_bright = (getResult("Mean", nResults - n + 1) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
-		sigrel_bright = getResult("Median", nResults - n + 1) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
-		noirel_bright = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
-		signoimedian_bright = sigrel_bright / noirel_bright; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
+		SNRmean_bright = (getResult("Mean", nResults - n + 1) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
+		signal_bright = getResult("Median", nResults - n + 1) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
+		signal_bright_stddev = SNR_stddev(getResult("StdDev", nResults - n + 1), getResult("StdDev", nResults - 1)); //STDDEV
+		noise = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+		noise_stddev = SNR_stddev(getResult("StdDev", nResults - 2), getResult("StdDev", nResults - 1));
+		SNRmedian_bright = signal_bright / noise; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 		signoi_bright = getResult("Median", nResults - n + 1) - getResult("Median", nResults - 2);
-		if (signoimedian_bright > pass_snr && signoi_bright > pass_signoi) pass_bright = "Pass";
+		signoi_bright_stddev = SNR_stddev(getResult("StdDev", nResults - n + 1), getResult("StdDev", nResults - 2));
+		if (SNRmedian_bright > pass_snr && signoi_bright > pass_signoi) pass_bright = "Pass";
 		else pass_bright = "Fail";
 		}
 	
-	signoimean = (getResult("Mean", nResults - n) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
-	sigrel = getResult("Median", nResults - n) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
-	noirel = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
-	signoimedian = sigrel / noirel; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
+	SNRmean = (getResult("Mean", nResults - n) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
+	signal = getResult("Median", nResults - n) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
+	signal_stddev = SNR_stddev(getResult("StdDev", nResults - n), getResult("StdDev", nResults - 1));
+	noise = getResult("Median", nResults - 2) - getResult("Median", nResults - 1); //Rel Noise = Noise Median - Back Median
+	noise_stddev = SNR_stddev(getResult("StdDev", nResults - 2), getResult("StdDev", nResults - 1));
+	SNRmedian = signal / noise; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 	cv = getResult("StdDev", nResults - n) / getResult("Mean", nResults - n); //Coefficient of Variation - Signal
 	signoi = getResult("Median", nResults - n) - getResult("Median", nResults - 2);
-	if (signoimedian > pass_snr && signoi > pass_signoi) pass = "Pass";
+	signoi_stddev = SNR_stddev(getResult("StdDev", nResults - n), getResult("StdDev", nResults - 2));
+	if (SNRmedian > pass_snr && signoi > pass_signoi) pass = "Pass";
 
 	/*
 	Warning Codes
@@ -1812,10 +1995,12 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 		warnings += 16;
 		}
 	if (getResult("Area", nResults - n) < area_cutoff) {
-		sigrel = 0;
-		signoimean = 0;
-		signoimedian = 0;
+		signal = 0;
+		signal_stddev = 0;
+		SNRmean = 0;
+		SNRmedian = 0;
 		signoi = 0;
+		signoi_stddev = 0;
 		warnings += 8;
 		pass = "Fail";
 		}
@@ -1831,7 +2016,7 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	
 	SNR_save_results(boo);
 	
-	return newArray(signoimedian, sigrel, noirel, signoimedian_bright, sigrel_bright, signoi, signoi_bright);
+	return newArray(SNRmedian, SNRmedian_bright, signal, signal_stddev, noise, noise_stddev, signal_bright, signal_bright_stddev, signoi, signoi_stddev, signoi_bright, signoi_bright_stddev);
 	}
 
 function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Save individual results
@@ -1861,17 +2046,20 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		
 		line += "," + pass;
 		line += "," + signoi;
-		line += "," + signoimean;
-		line += "," + signoimedian;
-		line += "," + sigrel;
-		line += "," + noirel;
+		line += "," + signoi_stddev;
+		line += "," + SNRmean;
+		line += "," + SNRmedian;
+		line += "," + signal;
+		line += "," + signal_stddev;
+		line += "," + noise;
+		line += "," + noise_stddev;
 		line += "," + spot_count;
 		line += "," + filtered_spots;
 		line += "," + maxima;
 		if (expansion_method == "Force Polygon") line += ", Polygon";
-		if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) line += ", Polygon";
-		if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
-		if (expansion_method == "Gaussian") line += ", Gaussian";
+		else if (expansion_method == "Normal" && spot_count + filtered_spots <= normal_limit) line += ", Polygon";
+		else if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
+		else if (expansion_method == "Gaussian") line += ", Gaussian";
 		line += "," + warnings;
 		print("[SNR]", line);
 		comb = line;
@@ -1891,9 +2079,11 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		
 		line += "," + pass_bright;
 		line += "," + signoi_bright;
-		line += "," + signoimean_bright;
-		line += "," + signoimedian_bright;
-		line += "," + sigrel_bright;
+		line += "," + signoi_bright_stddev;
+		line += "," + SNRmean_bright;
+		line += "," + SNRmedian_bright;
+		line += "," + signal_bright;
+		line += "," + signal_bright_stddev;
 		print("[SNR]", line);
 		comb += "\n" + line;
 		line = "";
@@ -1934,20 +2124,24 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		line += "," + pass;
 		if (boo != 1) line += "," + pass_bright;
 		line += "," + signoi;
+		line += "," + signoi_stddev;
 		if (boo != 1) line += "," + signoi_bright;
-		line += "," + signoimean;
-		line += "," + signoimedian;
-		if (boo != 1) line += "," + signoimedian_bright;
-		line += "," + sigrel;
-		if (boo != 1) line += "," + sigrel_bright;
-		line += "," + noirel;
+		if (boo != 1) line += "," + signoi_bright_stddev;
+		line += "," + SNRmean;
+		line += "," + SNRmedian;
+		if (boo != 1) line += "," + SNRmedian_bright;
+		line += "," + signal;
+		line += "," + signal_stddev;
+		if (boo != 1) line += "," + signal_bright;
+		line += "," + noise;
+		line += "," + noise_stddev;
 		line += "," + spot_count;
 		line += "," + filtered_spots;
 		line += "," + maxima;
 		if (expansion_method == "Force Polygon") line += ", Polygon";
-		if (expansion_method == "Normal" && spot_count + filtered_spots < normal_limit) line += ", Polygon";
-		if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
-		if (expansion_method == "Gaussian") line += ", Gaussian";
+		else if (expansion_method == "Normal" && spot_count + filtered_spots <= normal_limit) line += ", Polygon";
+		else if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
+		else if (expansion_method == "Gaussian") line += ", Gaussian";
 		line += "," + warnings;
 		print("[Condense]", line);
 		}
