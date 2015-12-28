@@ -89,7 +89,7 @@ user_area_double_check = true; //Double checks with the user if
 recreate_tif = false; //Forces re-saving tif files
 maxima_inc = 20; //Maxima Increment
 delay = 0; //Network delay
-rsquare = false; //Check for linear fit maxima search
+rsquare = true; //Check for linear fit maxima search
 output = "Out-SNRatio"; //Output folder
 count_bad = false; //Check to count large spots
 output_location = false;
@@ -129,7 +129,7 @@ Dialog.create("Spot Processor");
 
 Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Peaks"));
 Dialog.addChoice("Noise Masking Option:", newArray("Normal", "None"));
-Dialog.addChoice("Background Masking Option:", newArray("Inverse of Noise", "Histogram Peak", "Gaussian Histogram Peak", "Bottom 10%"));
+Dialog.addChoice("Background Masking Option:", newArray("Normal", "Histogram Peak", "Gaussian Histogram Peak", "Bottom 10%"));
 Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack", "Re-analyze Images"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim, reanalysis));
 Dialog.show();
 
@@ -149,7 +149,7 @@ reanalysis = Dialog.getCheckbox();
 
 maxima_start = maxima;
 tolerance_drop = (tolerance_bounding / 5) + 0.89;
-if (background_method_temp == "Inverse of Noise") background_method = 1;
+if (background_method_temp == "Normal") background_method = 1;
 else if (background_method_temp == "Histogram Peak") background_method = 2;
 else if (background_method_temp == "Gaussian Histogram Peak") background_method = 3;
 else if (background_method_temp == "Bottom 10%") background_method = 4;
@@ -204,7 +204,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("SNR Requirement", 0, 10, pass_snr);
 	Dialog.addSlider("Signal - Noise Requirement", 0, 500, pass_signoi);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 3, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force Create New Max/Median Images", "User Area Double Check", "Specify Output Folder Location", "Enable Debugging"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location, debug_switch));
+	Dialog.addCheckboxGroup(3, 3, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force New Max/Median Images", "User Area Double Check", "Specify Output Folder Location", "Enable Debugging"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location, debug_switch));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -260,7 +260,7 @@ if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
 
 //Write table headers
-table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " " + expansion_method + " " + noise_method + " " + background_method_temp; //-----Add maxima search method-----
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " (" + expansion_method + ", " + noise_method + ", " + background_method_temp + ")"; //-----Add maxima search method-----
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
@@ -284,7 +284,7 @@ if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 output_name = "Results";
 if (expansion_method != "Normal") output_name += " " + expansion_method;
 if (noise_method != "Normal") output_name += " " + noise_method;
-if (background_method_temp != "Inverse of Noise") output_name += " " + background_method_temp;
+if (background_method_temp != "Normal") output_name += " " + background_method_temp;
 
 output_name += " " + tolerance_bounding + "-" + tolerance_upward + "-" + tolerance_maxima;
 
@@ -292,8 +292,8 @@ if (filter == true) output_name += " Filtered-" + filter_low + "-" + filter_high
 if (ztrim == true) output_name += " Trimmed";
 if (pass_snr != 4 || pass_signoi != 200) output_name += " CustomPass"
 if (rsquare == true) output_name += " LinMaxSearch";
-if (custom_lut == true) output_name += " LUT-";
-if (custom_lut == true && min_cy3 !=0 && max_cy3 != 0) output_name = output_name + "Cy3" + min_cy3 + "-" + max_cy3;
+if (custom_lut == true) output_name += " LUT";
+if (custom_lut == true && min_cy3 !=0 && max_cy3 != 0) output_name = output_name + "_Cy3" + min_cy3 + "-" + max_cy3;
 if (custom_lut == true && min_cy35 !=0 && max_cy35 != 0) output_name = output_name + "_Cy35" + min_cy35 + "-" + max_cy35;
 if (custom_lut == true && min_cy55 !=0 && max_cy55 != 0) output_name = output_name + "_Cy55" + min_cy55 + "-" + max_cy55;
 if (custom_lut == true && min_fitc !=0 && max_fitc != 0) output_name = output_name + "_FITC" + min_fitc + "-" + max_fitc;
@@ -568,7 +568,7 @@ function SNR_main(dir, sub) {
 					selectImage(window_raw);
 					run("Z Project...", "projection=Median"); //Median intensity merge
 					window_Median = getImageID();
-					//run("Gaussian Blur...", "sigma=3"); //Blur Median
+					run("Gaussian Blur...", "sigma=3"); //Blur Median
 					selectImage(window_raw);
 					run("Close");
 					}
@@ -580,10 +580,10 @@ function SNR_main(dir, sub) {
 			final_file_list += "\n" + list[i]; //Save file names
 			selectImage(window_MaxIP);
 			getPixelSize(pixel_unit, pixel_width, pixel_height);
-			if (pixel_unit != "pixel") {
+			/*if (pixel_unit != "pixel") {
 				pixel_width *= 9.2764378478664192949907235621521;
 				pixel_height *= 9.2764378478664192949907235621521;
-				}
+				}*/
 			print("Channel: " + channel);
 			//Get User Area Selection, if needed
 			if (user_area == true) { //For selecting areas
@@ -1454,38 +1454,52 @@ function SNR_background4() { //Bottom 10%
 	}
 
 function SNR_noise() { //Measures Cell Noise
-	selectImage(window_Median);
-	run("Duplicate...", " ");
-	run("8-bit");
-	run("Select None");
-	roiManager("Select", 0);
-	if (noise_method == "Normal") {
-		run("Auto Local Threshold", "method=Phansalkar radius=100 parameter_1=0 parameter_2=0 white"); //Local Threshold cell noise
-		run("Create Selection"); //Create selection 2
-		run("Enlarge...", "enlarge=-2 pixel"); //Remove very small selections
-		run("Enlarge...", "enlarge=17 pixel"); //Expand Cell noise boundary; Needed for exceptional images
-		if (selectionType() != -1) {
-			roiManager("Add");
+	check = 0;
+	do {
+		check++;
+		selectImage(window_Median);
+		run("Duplicate...", " ");
+		run("8-bit");
+		run("Select None");
+		roiManager("Select", 0);
+		if (noise_method == "Normal") {
+			run("Auto Local Threshold", "method=Phansalkar radius=" + 15*check + " parameter_1=0 parameter_2=0 white"); //Local Threshold cell noise
+			run("Create Selection"); //Create selection 2
+			run("Enlarge...", "enlarge=-2 pixel"); //Remove very small selections
+			run("Enlarge...", "enlarge=17 pixel"); //Expand Cell noise boundary; Needed for exceptional images
+			if (selectionType() != -1) {
+				roiManager("Add");
+				}
+			else {
+				makePoint(0, 0);
+				roiManager("Add");
+				}
+			close();
+			selectImage(window_Median);
+			roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
+			roiManager("AND"); //Select regions of Cell Noise
 			}
 		else {
-			makePoint(0, 0);
 			roiManager("Add");
+			close();
+			selectImage(window_Median);
+			roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
+			roiManager("AND"); //Select regions of Cell Noise
 			}
-		close();
-		selectImage(window_Median);
-		roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
-		roiManager("AND"); //Select regions of Cell Noise
+		run("Measure");
+		if (noise_method == "Normal" && getResult("Area", nResults - 1) >= (width/pixel_width)*(height/pixel_height)-1 && check < 7) {
+			roiManager("Deselect");
+			roiManager("Select", roiManager("Count") - 1);
+			roiManager("Delete");
+			IJ.deleteRows(nResults-1, nResults-1)
+			}
+		} while (noise_method == "Normal" && getResult("Area", nResults - 1) >= (width/pixel_width)*(height/pixel_height)-1 && check < 7);
+	if (check > 1) {
+		setBatchMode(false);
+		exit("Noise Selection required " + check + " passes");
 		}
-	else {
-		roiManager("Add");
-		close();
-		selectImage(window_Median);
-		roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
-		roiManager("AND"); //Select regions of Cell Noise
-		}
-	run("Measure");
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
-	}//End of Noise function
+	} //End of Noise function
 
 function SNR_median(array) {
 	temparr = newArray(); //temporary array
@@ -1875,11 +1889,13 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		close();
 		}
 	if (rsquare == true) {
-		for (n = maxima + slope.length * 0.5 * maxima_inc; n < maxima + maxima - maxima_start + 10; n += maxima_inc) { //Continue measuring spots
+		temp_count = 2;
+		for (n = maxima + slope.length * 0.5 * maxima_inc; n < maxima + maxima - maxima_start + 10 && temp_count > 1; n += maxima_inc) { //Continue measuring spots
 			selectImage(window_Subtract);
 			roiManager("Select", 0);
 			run("Find Maxima...", "noise=" + n + " output=Count");
 			setResult("Maxima", nResults - 1, n);
+			temp_count = getResult("Count", nResults - 1);
 			updateResults();
 			}
 		if (tolerance_maxima > 9) tolerance_maxima = 0.99;
@@ -2141,6 +2157,7 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		line += "," + signal;
 		line += "," + signal_stddev;
 		if (boo != 1) line += "," + signal_bright;
+		if (boo != 1) line += "," + signal_bright_stddev;
 		line += "," + noise;
 		line += "," + noise_stddev;
 		line += "," + spot_count;
