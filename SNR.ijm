@@ -1,9 +1,9 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2.3"; //Beta Version
+version = "1.2.3.1"; //Beta Version
 
 /*
-Latest Version Date: 2015-12-21
+Latest Version Date: 2015-12-28
 Written by Trevor Okamoto, Product Specialist II, Stellaris. Biosearch Technologies Inc.
 
 ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
@@ -396,22 +396,22 @@ function SNR_main(dir, sub) {
 		path = sub + list[i];
 		window_MaxIP = 0;
 		window_raw = 0;
-		if ((endsWith(list[i], "/") || endsWith(list[i], "\\")) && indexOf(path, output) == -1 && indexOf(path, "Out") == -1 && indexOf(path, exclude) == -1) { //For Folders
+		if ((endsWith(list[i], "/") || endsWith(list[i], "\\")) && indexOf(path, output) == -1 && indexOf(path, "Out-") == -1 && indexOf(path, exclude) == -1) { //For Folders
 			SNR_main(dir, path); //Recursive Step
 			}
 		else if (endsWith(list[i], "/") == false && endsWith(list[i], "\\") == false && indexOf(list[i], exclude) == -1) { //For valid files
-			print("------------\nFile: " + path);
 			stripath = replace(substring(path, 0, lastIndexOf(path, ".")), "\\", "_");
 			stripath = replace(stripath, "/", "_");
 			reduced_cardinal = false;
 			//If file already analyzed with the current version and settings, SKIP
 			if (File.exists(savedataDir + stripath + "_Raw.csv") && File.exists(savedataDir + stripath + "_Condense.csv") && File.exists(outDir + stripath + "_Merge.tif") && reanalysis == false) {
-				print("File already analyzed with current version and settings... Skipping");
+				print("File already analyzed with current version and settings...Skipping");
 				print("[SNR]", File.openAsString(savedataDir + stripath + "_Raw.csv"));
 				print("[Condense]", File.openAsString(savedataDir + stripath + "_Condense.csv"));
 				}
 			//If max median are present, use them instead
 			else if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") && File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") && recreate_tif == false) { //If tif Files exist
+				print("------------\nFile: " + stripath + ".tif - Saved");
 				if (debug_switch) print(dir + list[i]); //Debug
 				open(mergeDir + "Max" + File.separator + stripath + ".tif"); //Open Max
 				window_MaxIP = getImageID();
@@ -434,6 +434,7 @@ function SNR_main(dir, sub) {
 				}
 			//For raw files
 			else if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif")) {
+				print("------------\nFile: " + path);
 				run("Bio-Formats Importer", "open=[" + dir + path + "] display_metadata view=[Metadata only]");
 				selectWindow("Original Metadata - " + list[i]);
 				saveAs("Text", inDir + "temp.txt");
@@ -469,28 +470,29 @@ function SNR_main(dir, sub) {
 					}
 				else { //If not multidimension or has been split, assign channel
 					channel = "Unknown";
-					if (indexOf(info, "uiGroupCount	1") > -1) { //If not ND acquisition 
-						if (indexOf(info, "Name	FITC") > -1) channel = "FITC";
-						if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";						
-						if (indexOf(info, "Name	Cy3.5") > -1) channel = "Cy3.5";
-						if (indexOf(info, "Name	Cy5.5") > -1) channel = "Cy5.5";
-						if (indexOf(info, "Name	DAPI") > -1) channel = "DAPI";
-						}
-					else { //If ND acquisition
+					if (indexOf(info, "uiGroupCount") > -1) {
 						temp = indexOf(info, "uiGroupCount");
 						channel_num = parseInt(substring(info, temp + 12, temp + 16));
-						print("Number of Channels Detected: " + channel_num);
-						for (n = 0; n < channel_num; n++) { //Find what C=n this image is
-							if (indexOf(info, "C=" + n) > -1) { //Once you find what C=n this image is, find what filter is associated with that n (Filter #n+1)
-								if (indexOf(info, "Turret1) #" + n + 1 + "	1" ) > -1) channel = "DAPI";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	2" ) > -1) channel = "FITC";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	3" ) > -1) channel = "Cy3";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	4" ) > -1) channel = "Cy3.5";
-								else if (indexOf(info, "Turret1) #" + n + 1 + "	5" ) > -1) channel = "Cy5.5";
+						if (channel_num == 1) { //If not ND acquisition, single channel
+							if (indexOf(info, "Name	FITC") > -1) channel = "FITC";
+							if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";						
+							if (indexOf(info, "Name	Cy3.5") > -1) channel = "Cy3.5";
+							if (indexOf(info, "Name	Cy5.5") > -1) channel = "Cy5.5";
+							if (indexOf(info, "Name	DAPI") > -1) channel = "DAPI";
+							}
+						else if (channel_num > 1) { //If ND acquisition
+							print(SNR_spelt_number(channel_num, true) + " Channel(s) Detected");
+							for (n = 0; n < channel_num; n++) { //Find what C=n this image is
+								if (indexOf(info, "C=" + n) > -1) { //Once you find what C=n this image is, find what filter is associated with that n (Filter #n+1)
+									if (indexOf(info, "Turret1) #" + n + 1 + "	1" ) > -1) channel = "DAPI";
+									else if (indexOf(info, "Turret1) #" + n + 1 + "	2" ) > -1) channel = "FITC";
+									else if (indexOf(info, "Turret1) #" + n + 1 + "	3" ) > -1) channel = "Cy3";
+									else if (indexOf(info, "Turret1) #" + n + 1 + "	4" ) > -1) channel = "Cy3.5";
+									else if (indexOf(info, "Turret1) #" + n + 1 + "	5" ) > -1) channel = "Cy5.5";
+									}
 								}
 							}
 						}
-					
 					if (channel != "DAPI") {
 						run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale split_channels view=Hyperstack stack_order=XYCZT");
 						window_raw = getImageID();
@@ -2090,7 +2092,7 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		line = "";
 		}
 	
-	if (boo == 2) {//Print Bright line of Raw
+	if (boo == 2) { //Print Bright line of Raw
 		line += getResultString("Area", nResults - n + 1);
 		line += "," + getResultString("Mean", nResults - n + 1);
 		line += "," + getResultString("StdDev", nResults - n + 1);
@@ -2212,4 +2214,91 @@ function SNR_natural_time(prefix, time) { //Accepts a prefix and a time array of
 		if (time[2] > 1) temp += "s";
 		}
 	return temp;
+	}
+
+function SNR_spelt_number(int) {
+	sign = false;
+	if (int < 0) {
+		sign = true;
+		int *= -1;
+		}
+	
+	if (int < 10) {
+		if (floor(int) == 0) result =  "Zero";
+		else if (floor(int) == 1) result = "One";
+		else if (floor(int) == 2) result = "Two";
+		else if (floor(int) == 3) result = "Three";
+		else if (floor(int) == 4) result = "Four";
+		else if (floor(int) == 5) result = "Five";
+		else if (floor(int) == 6) result = "Six";
+		else if (floor(int) == 7) result = "Seven";
+		else if (floor(int) == 8) result = "Eight";
+		else if (floor(int) == 9) result = "Nine";
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else if (int < 20) {
+		if (floor(int) == 10) result = "Ten";
+		else if (floor(int) == 11) result = "Eleven";
+		else if (floor(int) == 12) result = "Twelve";
+		else if (floor(int) == 13) result = "Thirteen";
+		else if (floor(int) == 14) result = "Fourteen";
+		else if (floor(int) == 15) result = "Fifteen";
+		else if (floor(int) == 16) result = "Sixteen";
+		else if (floor(int) == 17) result = "Seventeen";
+		else if (floor(int) == 18) result = "Eighteen";
+		else if (floor(int) == 19) result = "Nineteen";
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else if (int < 100) {
+		if (floor(int) == 20) result = "Twenty";
+		else if (int > 20 && int < 30) result = "Twenty " + SNR_spelt_number(int%10);
+		else if (floor(int) == 30) result = "Thirty";
+		else if (int > 30 && int < 40) result = "Thirty " + SNR_spelt_number(int%10);
+		else if (floor(int) == 40) result = "Fourty";
+		else if (int > 40 && int < 50) result = "Fourty " + SNR_spelt_number(int%10);
+		else if (floor(int) == 50) result = "Fifty";
+		else if (int > 50 && int < 60) result = "Fifty " + SNR_spelt_number(int%10);
+		else if (floor(int) == 60) result = "Sixty";
+		else if (int > 60 && int < 70) result = "Sixty " + SNR_spelt_number(int%10);
+		else if (floor(int) == 70) result = "Seventy";
+		else if (int > 70 && int < 80) result = "Seventy " + SNR_spelt_number(int%10);
+		else if (floor(int) == 80) result = "Eighty";
+		else if (int > 80 && int < 90) result = "Eighty " + SNR_spelt_number(int%10);
+		else if (floor(int) == 90) result = "Ninety";
+		else if (int > 90 && int < 100) result = "Ninety " + SNR_spelt_number(int%10);
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else if (int < 1000) {
+		result = "" + SNR_spelt_number(int/100) + " Hundred";
+		if (int%100 != 0) result += " and " + SNR_spelt_number(int%100);
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else if (int < 1000000) {
+		result = "" + SNR_spelt_number(int/1000) + " Thousand";
+		if (int%1000 != 0) result += ", " + SNR_spelt_number(int%1000);
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else if (int < 1000000000) {
+		result = "" + SNR_spelt_number(int/1000000) + " Million";
+		if (int%1000000 != 0) result += ", " + SNR_spelt_number(int%1000000);
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else if (int < 1000000000000) {
+		result = "" + SNR_spelt_number(int/1000000000) + " Billion";
+		if (int%1000000000 != 0) result += ", " + SNR_spelt_number(int%1000000000);
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
+	else {
+		if (random > 0.5) result = "\"A Lot\"";
+		else result = "\"A Thousand\"";
+		if (sign == false) return result;
+		else return "Negative " + result;
+		}
 	}
