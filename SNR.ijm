@@ -472,25 +472,31 @@ function SNR_main(dir, sub) {
 					channel = "Unknown";
 					if (indexOf(info, "uiGroupCount") > -1) {
 						temp = indexOf(info, "uiGroupCount");
-						channel_num = parseInt(substring(info, temp + 12, temp + 16));
+						channel_num = parseInt(substring(info, temp + 12, temp + 14));
+						//print(substring(info, temp + 12, temp + 14));
 						if (channel_num == 1) { //If not ND acquisition, single channel
 							if (indexOf(info, "Name	FITC") > -1) channel = "FITC";
-							if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";						
+							if (indexOf(info, "Name	Cy3") > -1) channel = "Cy3";
 							if (indexOf(info, "Name	Cy3.5") > -1) channel = "Cy3.5";
 							if (indexOf(info, "Name	Cy5.5") > -1) channel = "Cy5.5";
 							if (indexOf(info, "Name	DAPI") > -1) channel = "DAPI";
 							}
 						else if (channel_num > 1) { //If ND acquisition
-							print(SNR_spelt_number(channel_num, true) + " Channel(s) Detected");
+							print(SNR_spelt_number(channel_num) + " Channel(s) Detected");
 							for (n = 0; n < channel_num; n++) { //Find what C=n this image is
 								if (indexOf(info, "C=" + n) > -1) { //Once you find what C=n this image is, find what filter is associated with that n (Filter #n+1)
 									if (indexOf(info, "Turret1) #" + n + 1 + "	1" ) > -1) channel = "DAPI";
-									else if (indexOf(info, "Turret1) #" + n + 1 + "	2" ) > -1) channel = "FITC";
-									else if (indexOf(info, "Turret1) #" + n + 1 + "	3" ) > -1) channel = "Cy3";
-									else if (indexOf(info, "Turret1) #" + n + 1 + "	4" ) > -1) channel = "Cy3.5";
-									else if (indexOf(info, "Turret1) #" + n + 1 + "	5" ) > -1) channel = "Cy5.5";
+									if (indexOf(info, "Turret1) #" + n + 1 + "	2" ) > -1) channel = "FITC";
+									if (indexOf(info, "Turret1) #" + n + 1 + "	3" ) > -1) channel = "Cy3";
+									if (indexOf(info, "Turret1) #" + n + 1 + "	4" ) > -1) channel = "Cy3.5";
+									if (indexOf(info, "Turret1) #" + n + 1 + "	5" ) > -1) channel = "Cy5.5";
 									}
 								}
+							}
+						else {
+							print("Metadata is missing \"uiGroupCount\"");
+							//print(SNR_spelt_number(channel_num) + " Channel(s) Detected");
+							//exit();
 							}
 						}
 					if (channel != "DAPI") {
