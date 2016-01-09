@@ -1,6 +1,6 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2.3.1"; //Beta Version
+version = "1.2.3.2"; //Beta Version
 
 /*
 Latest Version Date: 2015-12-28
@@ -40,6 +40,10 @@ if (isOpen("Peak")) {
 	}
 if (isOpen("Sum")) {
 	selectWindow("Sum");
+	run("Close");
+	}
+if (isOpen("Debug Log")) {
+	selectWindow("Debug Log");
 	run("Close");
 	}
 
@@ -204,7 +208,7 @@ if (advanced == true) { //Advanced Options Dialog
 	Dialog.addSlider("SNR Requirement", 0, 10, pass_snr);
 	Dialog.addSlider("Signal - Noise Requirement", 0, 500, pass_signoi);
 	Dialog.addSlider("Network Delay", 0, 10, delay);
-	Dialog.addCheckboxGroup(3, 3, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force New Max/Median Images", "User Area Double Check", "Specify Output Folder Location", "Enable Debugging"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location, debug_switch));
+	Dialog.addCheckboxGroup(3, 3, newArray("Include Large Spots", "Disable Warning Codes", "Linear Fit Maxima Search(Experimental)", "Force New Max/Median Images", "User Area Double Check", "Specify Output Folder Location", "Enable Debug Output"), newArray(count_bad, warning_disable, rsquare, recreate_tif, user_area_double_check, output_location, debug_switch));
 	Dialog.addMessage("Warning Cutoffs");
 	Dialog.addSlider("Coefficient of Variation S", 0, 2, warning_cvspot);
 	Dialog.addSlider("Coefficient of Variation N", 0, 2, warning_cvnoise);
@@ -258,13 +262,16 @@ run("Table...", "name=SNR width=400 height=200");
 if (peak_intensity == true) run("Table...", "name=Peak width=40 height=200");
 if (sum_intensity == true) run("Table...", "name=Sum width=400 height=200");
 run("Table...", "name=Condense width=400 height=200");
+if (debug_switch) run("Text Window...", "name=[Debug Log] width=60 height=16 monospaced");
 
 //Write table headers
+if (debug_switch) print("[Debug Log]", "\nWriting Table Header");
 table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " (" + expansion_method + ", " + noise_method + ", " + background_method_temp + ")"; //-----Add maxima search method-----
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
 //Write Table Labels
+if (debug_switch) print("[Debug Log]", "\nWriting Table Labels");
 table_head = "Area,Mean,StdDev,Min,Max,Median,File,Description,Coefficient of Variation,Pass,S - N,S - N StdDev,Mean SNR,Median SNR,Signal,Signal StdDev,Noise,Noise StdDev,Spots,Filtered Spots,Maxima,Expansion Method";
 if (warning_disable == false) table_head += ",Warning Code";
 print("[SNR]", table_head);
@@ -280,7 +287,7 @@ if (peak_intensity == true) print("[Peak]", "Peak Brightness");
 if (sum_intensity == true) print("[Sum]", "Sum Intensity");
 
 //Create Directories
-
+if (debug_switch) print("[Debug Log]", "\nCreating Directories");
 output_name = "Results";
 if (expansion_method != "Normal") output_name += " " + expansion_method;
 if (noise_method != "Normal") output_name += " " + noise_method;
@@ -320,12 +327,15 @@ if (tif_ready == false) { //Create Merged images folder if doesn't already exist
 	}
 
 //RUN IT!
+if (debug_switch) print("[Debug Log]", "\nMain Process Starting");
 total_start = getTime();
 if (File.exists(mergeDir + "log.txt")) File.append("----------\nStarted " + version + "...\n" + output_name, mergeDir + "log.txt");
 final_file_list = "";
 final_file_list = SNR_main(inDir, "");
+if (debug_switch) print("[Debug Log]", "\nMain Process Complete");
 
 //Save it!
+if (debug_switch) print("[Debug Log]", "\nSaving Results");
 if (indexOf(getVersion(), "1.49n") > -1) { //Save as Text if running 1.49n
 	selectWindow("SNR");
 	saveAs("Text", outDir + "Results_Raw.csv");
@@ -365,13 +375,14 @@ else { //Save as Measurement csv file if running other
 
 total_time = newArray();
 total_time = SNR_timediff(total_start, getTime()); //Get total_time array for days, hours, and minutes difference
-natural_time = SNR_natural_time("Total Time Elapsed: ", total_time); //Get natural spoken time string
+print(SNR_natural_time("Total Time Elapsed: ", total_time)); //Get natural spoken time string
 
 if (File.exists(mergeDir + "log.txt") == false) {
 	File.saveString(inDir + "\n----------" + final_file_list + "\n", mergeDir + "log.txt");
 	File.append("==========\n \nStarted " + version + "...\n" + output_name, mergeDir + "log.txt");
 	}
 
+if (debug_switch) print("[Debug Log]", "\nClean up");
 File.delete(inDir + "temp.txt");
 File.append("...Completed", mergeDir + "log.txt");
 run("Collect Garbage");
@@ -389,13 +400,14 @@ function SNR_main(dir, sub) {
 	for (i = 0; i < list.length; i++) {
 		if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif") && indexOf(list[i], exclude) == -1) img_files++;
 		}
-	if (debug_switch) print(img_files); //Debug
+	if (debug_switch) print("[Debug Log]", "\nFound " + img_files + " files");
 	start_time = getTime();
 	for (i = 0; i < list.length; i++) { //for each file
 		showProgress(1 / list.length - 1);
 		path = sub + list[i];
 		window_MaxIP = 0;
 		window_raw = 0;
+		if (debug_switch) print("[Debug Log]", "\nDetermining File type");
 		if ((endsWith(list[i], "/") || endsWith(list[i], "\\")) && indexOf(path, output) == -1 && indexOf(path, "Out-") == -1 && indexOf(path, exclude) == -1) { //For Folders
 			SNR_main(dir, path); //Recursive Step
 			}
@@ -405,14 +417,13 @@ function SNR_main(dir, sub) {
 			reduced_cardinal = false;
 			//If file already analyzed with the current version and settings, SKIP
 			if (File.exists(savedataDir + stripath + "_Raw.csv") && File.exists(savedataDir + stripath + "_Condense.csv") && File.exists(outDir + stripath + "_Merge.tif") && reanalysis == false) {
-				print("File already analyzed with current version and settings...Skipping");
+				print("------------\n" + path + " was already analyzed with the same version and settings...Skipping");
 				print("[SNR]", File.openAsString(savedataDir + stripath + "_Raw.csv"));
 				print("[Condense]", File.openAsString(savedataDir + stripath + "_Condense.csv"));
 				}
 			//If max median are present, use them instead
 			else if (File.exists(mergeDir + "Max" + File.separator + stripath + ".tif") && File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") && recreate_tif == false) { //If tif Files exist
 				print("------------\nFile: " + stripath + ".tif - Saved");
-				if (debug_switch) print(dir + list[i]); //Debug
 				open(mergeDir + "Max" + File.separator + stripath + ".tif"); //Open Max
 				window_MaxIP = getImageID();
 				channel = getMetadata("Info");
@@ -462,13 +473,15 @@ function SNR_main(dir, sub) {
 							}
 						}
 					//Move multidimension file to separate folder
-					File.makeDirectory(dir + File.separator + "Multi-dimension Files" + File.separator);
-					File.rename(dir + path, dir + File.separator + "Multi-dimension Files" + File.separator + path);
+					close;
+					File.makeDirectory(dir + File.separator + "Out-Multi-dimension Files" + File.separator);
+					if(File.rename(dir + path, dir + File.separator + "Out-Multi-dimension Files" + File.separator + path) == false) exit("Could not move Multi-dimension file " + path);
 					list = getFileList(dir + sub);
-					i = 0;
+					i--;
 					//exit("This Macro is only compatible with files that contain a single Z-stack.\nYour file has been split\nPlease restart the program.");
 					}
 				else { //If not multidimension or has been split, assign channel
+					if (debug_switch) print("[Debug Log]", "\nDetermining Channel");
 					channel = "Unknown";
 					if (indexOf(info, "uiGroupCount") > -1) {
 						temp = indexOf(info, "uiGroupCount");
@@ -482,30 +495,39 @@ function SNR_main(dir, sub) {
 							if (indexOf(info, "Name	DAPI") > -1) channel = "DAPI";
 							}
 						else if (channel_num > 1) { //If ND acquisition
-							print(SNR_spelt_number(channel_num) + " Channel(s) Detected");
-							for (n = 0; n < channel_num; n++) { //Find what C=n this image is
-								if (indexOf(info, "C=" + n) > -1) { //Once you find what C=n this image is, find what filter is associated with that n (Filter #n+1)
-									if (indexOf(info, "Turret1) #" + n + 1 + "	1" ) > -1) channel = "DAPI";
-									if (indexOf(info, "Turret1) #" + n + 1 + "	2" ) > -1) channel = "FITC";
-									if (indexOf(info, "Turret1) #" + n + 1 + "	3" ) > -1) channel = "Cy3";
-									if (indexOf(info, "Turret1) #" + n + 1 + "	4" ) > -1) channel = "Cy3.5";
-									if (indexOf(info, "Turret1) #" + n + 1 + "	5" ) > -1) channel = "Cy5.5";
-									}
-								}
+							print(SNR_spelt_number(channel_num) + " Other Channel(s) Detected");
+							//Find C=
+							temp = indexOf(info, "C=");
+							C_num = parseInt(substring(info, temp + 2, temp + 3));
+							//print("C_num " + C_num);
+							//C_num = parseInt(C_num);
+							//print("C_num " + C_num);
+							//Find Turret number
+							temp = indexOf(info, "Turret1) #" + (C_num + 1));
+							Turret = parseInt(substring(info, temp + 12, temp + 13));
+							//print("Turret " + Turret);
+							//Turret = parseInt(Turret);
+							//print("Turret " + Turret);
+							if (Turret == 1) channel = "DAPI";
+							if (Turret == 2) channel = "FITC";
+							if (Turret == 3) channel = "Cy3";
+							if (Turret == 4) channel = "Cy3.5";
+							if (Turret == 5) channel = "Cy5.5";
 							}
 						else {
-							print("Metadata is missing \"uiGroupCount\"");
+							print("Error: Metadata is missing \"uiGroupCount\"");
 							//print(SNR_spelt_number(channel_num) + " Channel(s) Detected");
 							//exit();
 							}
 						}
 					if (channel != "DAPI") {
+						if (debug_switch) print("[Debug Log]", "\nOpening File");
 						run("Bio-Formats Importer", "open=[" + dir + path + "] autoscale color_mode=Grayscale split_channels view=Hyperstack stack_order=XYCZT");
 						window_raw = getImageID();
 						if (nSlices == 1) {
 							close();
 							window_raw = 0;
-							print("Images must have more than one slice");
+							print("Images must have more than one slice for proper analysis");
 							img_files--;
 							img_skip++;
 							}
@@ -518,6 +540,7 @@ function SNR_main(dir, sub) {
 						}
 					}
 				if (window_raw != 0) { //Initialize Image if opened
+					if (debug_switch) print("[Debug Log]", "\nInitialize Image");
 					height = getHeight();
 					width = getWidth();
 					z_min = 1;
@@ -584,6 +607,7 @@ function SNR_main(dir, sub) {
 			}
 		//Analysis, only if a file was opened
 		if (window_MaxIP != 0) {
+			if (debug_switch) print("[Debug Log]", "\nAnalyzing Image");
 			img_processed++;
 			final_file_list += "\n" + list[i]; //Save file names
 			selectImage(window_MaxIP);
@@ -668,6 +692,7 @@ function SNR_main(dir, sub) {
 			
 			//Run peak intensity and Sum intensity measurements
 			if (peak_intensity == true) {
+				if (debug_switch) print("[Debug Log]", "\nPeak Intensity");
 				selectImage(window_Subtract);
 				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=[Point Selection]");
@@ -680,6 +705,7 @@ function SNR_main(dir, sub) {
 				run("Find Maxima...", "noise=" + maxima + " output=List");
 				}
 			if (sum_intensity == true) {
+				if (debug_switch) print("[Debug Log]", "\nSum Intensity");
 				selectImage(window_Subtract);
 				roiManager("Select", 0);
 				run("Find Maxima...", "noise=" + maxima + " output=List");
@@ -730,11 +756,9 @@ function SNR_main(dir, sub) {
 				}
 			spot_count = q;
 			//Expand dots
-			if (debug_switch) {
-				selectImage(window_signal);
-				setBatchMode('show');
-				}
+			if (debug_switch) print("[Debug Log]", "\nSpot Expansion");
 			if (expansion_method == "Gaussian") { //If gaussian is selected run the gaussian fitting
+				if (debug_switch) print("[Debug Log]", "\nGaussian");
 				amplitude = newArray();
 				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_gauss_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
@@ -752,6 +776,7 @@ function SNR_main(dir, sub) {
 					} //End of dots loop
 				}
 			else if (x_values.length > normal_limit && expansion_method == "Normal") { //Run the faster dots program if there's too many dots
+				if (debug_switch) print("[Debug Log]", "\nDots");
 				reduced_cardinal = true;
 				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_dots(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
@@ -768,6 +793,7 @@ function SNR_main(dir, sub) {
 					} //End of dots loop
 				}
 			else if (expansion_method == "Peaks") {
+				if (debug_switch) print("[Debug Log]", "\nPeaks");
 				for (q = 0; q < x_values.length; q++) {
 					cardinal = SNR_peak(x_values[q], y_values[q], window_signal);
 					north = Array.concat(north, 0);
@@ -781,6 +807,7 @@ function SNR_main(dir, sub) {
 					}
 				}
 			else if (x_values.length <= normal_limit || expansion_method == "Force Polygon"){ //Force polygon or if running on normal and less than normal_limit
+				if (debug_switch) print("[Debug Log]", "\nPolygon");
 				for (q = 0; q < x_values.length && q < 10000; q++) {
 					cardinal = SNR_polygon(x_values[q], y_values[q], window_signal); //Run dots with different x and y values
 					if (filter == true) {
@@ -809,6 +836,7 @@ function SNR_main(dir, sub) {
 			mean_intensity_high = newArray();
 			
 			if (filter == true) { //Filter spots based on MADe settings
+				if (debug_switch) print("[Debug Log]", "\nFiltering Spots");
 				selectImage(window_signal);
 				close();
 				mean_intensity = newArray();
@@ -903,6 +931,7 @@ function SNR_main(dir, sub) {
 				setColor(0);
 				temp = count_bad;
 				count_bad = true;
+				if (debug_switch) print("[Debug Log]", "\nRe-run spot expansion on high values");
 				for (q = 0; q < x_values_high.length && q < 10000; q++) {
 					//print(x_values_high[q], y_values_high[q]);
 					if (expansion_method == "Gaussian") {
@@ -960,7 +989,7 @@ function SNR_main(dir, sub) {
 						roiManager("Add");
 						}
 					else {
-						makePoint(0, 0);
+						makeRectangle(0, 0, 2, 2);
 						roiManager("Add");
 						}
 					run("Make Inverse");
@@ -988,7 +1017,7 @@ function SNR_main(dir, sub) {
 							roiManager("Add");
 							}
 						else {
-							makePoint(0, 0);
+							makeRectangle(0, 0, 2, 2);
 							roiManager("Add");
 							}
 						run("Make Inverse");
@@ -1007,14 +1036,6 @@ function SNR_main(dir, sub) {
 					selectImage(window_high_signal);
 					close();
 					}
-				
-				//DEBUG
-				if (debug_switch) {
-					selectImage(window_MaxIP);
-					roiManager("Select", 2);
-					setBatchMode('show');
-					}
-				
 				
 				//Regular Signal
 				SNR_signal(1); //give regular signal
@@ -1043,6 +1064,7 @@ function SNR_main(dir, sub) {
 				updateResults();
 				}
 			else { //Do not filter spots
+				if (debug_switch) print("[Debug Log]", "\nNot Filtering Spots");
 				//Create Selection of signal
 				print(spot_count + " points processed");
 				if (filtered_spots > 0) print(filtered_spots + " points ignored");
@@ -1052,7 +1074,7 @@ function SNR_main(dir, sub) {
 					roiManager("Add");
 					}
 				else {
-					makePoint(0, 0);
+					makeRectangle(0, 0, 2, 2);
 					roiManager("Add");
 					} //Create Signal selection
 				run("Make Inverse"); //Make selection inverted
@@ -1093,6 +1115,7 @@ function SNR_main(dir, sub) {
 			
 			
 			//Prep Images
+			if (debug_switch) print("[Debug Log]", "\nPrep Images");
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
 			setMetadata("Info", channel);
@@ -1153,17 +1176,19 @@ function SNR_main(dir, sub) {
 			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Max 8-bit" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Max 8-bit" + File.separator + stripath + ".tif");
 			setForegroundColor(0, 0, 0);
-			if (filter == true && x_values_high.length > 0) drawString(path + "\nRegular SNR/Signal: " + array_results[0] + "/" + array_results[8] + "±" + array_results[9] + "\nBright SNR/Signal: " + array_results[1] + "/" + array_results[10] + "±" + array_results[11], 10, 40, 'white');
-			else drawString(path + "\nSNR/Signal: " + array_results[0] + "/" + array_results[8] + "±" + array_results[9], 10, 40, 'white');
+			if (filter == true && x_values_high.length > 0) drawString("Maximum Intensity Merge\nRegular SNR/Signal: " + array_results[0] + "/" + array_results[8] + "±" + array_results[9] + "\nBright SNR/Signal: " + array_results[1] + "/" + array_results[10] + "±" + array_results[11], 10, 40, 'white');
+			else drawString("Maximum Intensity Merge\nSNR/Signal: " + array_results[0] + "/" + array_results[8] + "±" + array_results[9], 10, 40, 'white');
+			drawString(path, 10, height - 20, 'white');
 			selectImage(window_Median);
 			run("Enhance Contrast", "saturated=0.01"); //Make the Median image pretty
 			setMetadata("Info", channel);
 			if (File.exists(mergeDir + "Median" + File.separator + stripath + ".tif") == false || recreate_tif == true) saveAs("tif", mergeDir + "Median" + File.separator + stripath + ".tif");
 			run("8-bit");
-			if (filter == true && x_values_high.length > 0) drawString("Median Merge\nRegular Signal: " + array_results[2] + "±" + array_results[3] + "\nBright Signal: " + array_results[6] + "±" + array_results[7] + "\nNoise: " + array_results[4] + "±" + array_results[5], 10, 40, 'white');
-			else drawString("Median\nSignal: " + array_results[2] + "±" + array_results[3] + "\nNoise: " + array_results[4] + "±" + array_results[5], 10, 40, 'white');	
+			if (filter == true && x_values_high.length > 0) drawString("Median Intensity Merge\nRegular Signal: " + array_results[2] + "±" + array_results[3] + "\nBright Signal: " + array_results[6] + "±" + array_results[7] + "\nNoise: " + array_results[4] + "±" + array_results[5], 10, 40, 'white');
+			else drawString("Median Intensity Merge\nSignal: " + array_results[2] + "±" + array_results[3] + "\nNoise: " + array_results[4] + "±" + array_results[5], 10, 40, 'white');	
 			
 			//Add Slice with Cell Noise and Signal areas on it
+			if (debug_switch) print("[Debug Log]", "\nAdding Selections Slice");
 			selectImage(window_MaxIP);
 			run("Images to Stack", "name=Stack title=[] use");
 			setSlice(1);
@@ -1176,7 +1201,11 @@ function SNR_main(dir, sub) {
 			run("Select None");
 			//setBatchMode('show');
 			if (filter == true && x_values_high.length > 0) {
-				SNR_drawHash(15, 0);
+				roiManager("Select", newArray(0,6)); //Background 
+				roiManager("AND");
+				run("Make Inverse");
+				roiManager("Add");
+				SNR_drawHash(20, roiManager("Count") - 1);
 				roiManager("Select", newArray(0,6)); //Background 
 				roiManager("AND");
 				//run("Make Inverse");
@@ -1220,10 +1249,14 @@ function SNR_main(dir, sub) {
 						}
 					}
 				setForegroundColor(0, 0, 0);
-				drawString("Maxima: " + maxima + "\nRegular Spots: " + spot_count + "/" + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
+				drawString("Selection Bounds\nMaxima: " + maxima + "\nRegular Spots: " + spot_count + "\nFalse Spots Removed: " + filtered_spots + "\nBright Spots: " + x_values_high.length, 10, 40, 'white');
 				}
 			else {
-				SNR_drawHash(15, 0);
+				roiManager("Select", newArray(0,4)); //Background 
+				roiManager("AND");
+				run("Make Inverse");
+				roiManager("Add");
+				SNR_drawHash(20, roiManager("Count") - 1);
 				roiManager("Select", newArray(0,4)); //Background 
 				roiManager("AND");
 				//run("Make Inverse");
@@ -1251,7 +1284,7 @@ function SNR_main(dir, sub) {
 						setPixel(x_values[q], y_values[q], 200);
 						}
 					}
-				drawString("Maxima: " + maxima + "\nSpots: " + spot_count + "/" + filtered_spots, 10, 40, 'white');
+				drawString("Selection Bounds\nMaxima: " + maxima + "\nSpots: " + spot_count + "\nFalse Spots Removed: " + filtered_spots, 10, 40, 'white');
 				}
 			//setBatchMode('hide');
 			run("Select None");
@@ -1280,6 +1313,7 @@ function SNR_main(dir, sub) {
 				run("Reverse");
 				}
 			run("Select None");
+			if (debug_switch) print("[Debug Log]", "\nSaving debug image");
 			saveAs("tif	", outDir + stripath + "_Merge.tif");
 			run("Close All");
 			roiManager("Reset");
@@ -1308,17 +1342,22 @@ function SNR_main(dir, sub) {
 	} //end of main function
 
 function SNR_drawHash(space, roi) {
+	if (debug_switch) print("[Debug Log]", "\nDrawing hash marks\n");
 	roiManager("Select", roi);
 	getSelectionBounds(x, y, draw_width, draw_height);
 	setColor(170);
 	start = roiManager("Count");
-	inc = space*2;
+	inc = space*1.414;
+	//Draw hash across y=0
 	for (n = 0; n*inc < draw_width+draw_height; n++) {
 		makeLine(x-draw_height+n*inc, y+draw_height, x+n*inc, y);
 		roiManager("Add");
+		if (debug_switch) print("[Debug Log]", ".");
 		}
+	//Finish hash across x=draw_width
 	lines = Array.slice(Array.getSequence(roiManager("Count")), start);
 	roiManager("Select", lines);
+	//exit("Check OR function");
 	roiManager("OR");
 	roiManager("Add");
 	roiManager("Select", newArray(roi, roiManager("Count")-1));
@@ -1336,6 +1375,7 @@ function SNR_background(choice) {
 	}
 
 function SNR_background1() { //Measures background, inverse of noise in median image
+	if (debug_switch) print("[Debug Log]", "\nMeasuring Background - Normal");
 	selectImage(window_Median);
 	run("Duplicate...", " ");
 	run("8-bit");
@@ -1350,7 +1390,7 @@ function SNR_background1() { //Measures background, inverse of noise in median i
 		roiManager("Add");
 		}
 	else {
-		makePoint(0, 0);
+		makeRectangle(0, 0, 2, 2);
 		roiManager("Add");
 		}
 	close();
@@ -1362,6 +1402,7 @@ function SNR_background1() { //Measures background, inverse of noise in median i
 	} //End of Function
 
 function SNR_background2() { //Peak histogram
+	if (debug_switch) print("[Debug Log]", "\nMeasuring Background - Peak");
 	selectImage(window_Median);
 	run("Duplicate...", " ");
 	run("Select None");
@@ -1388,7 +1429,7 @@ function SNR_background2() { //Peak histogram
 		roiManager("Add");
 		}
 	else {
-		makePoint(0, 0);
+		makeRectangle(0, 0, 2, 2);
 		roiManager("Add");
 		}
 	close();
@@ -1400,6 +1441,7 @@ function SNR_background2() { //Peak histogram
 	}
 	
 function SNR_background3() { //Gaussian Fit Peak
+	if (debug_switch) print("[Debug Log]", "\nMeasuring Background - Gaussian");
 	selectImage(window_Median);
 	run("Duplicate...", " ");
 	run("Select None");
@@ -1418,7 +1460,7 @@ function SNR_background3() { //Gaussian Fit Peak
 		roiManager("Add");
 		}
 	else {
-		makePoint(0, 0);
+		makeRectangle(0, 0, 2, 2);
 		roiManager("Add");
 		}
 	close();
@@ -1430,6 +1472,7 @@ function SNR_background3() { //Gaussian Fit Peak
 	}
 
 function SNR_background4() { //Bottom 10%
+	if (debug_switch) print("[Debug Log]", "\nMeasuring Background - 10%");
 	selectImage(window_Median);
 	run("Duplicate...", " ");
 	roiManager("Select", 0);
@@ -1450,7 +1493,7 @@ function SNR_background4() { //Bottom 10%
 		roiManager("Add");
 		}
 	else {
-		makePoint(0, 0);
+		makeRectangle(0, 0, 2, 2);
 		roiManager("Add");
 		}
 	close();
@@ -1462,6 +1505,7 @@ function SNR_background4() { //Bottom 10%
 	}
 
 function SNR_noise() { //Measures Cell Noise
+	if (debug_switch) print("[Debug Log]", "\nMeasuring Noise");
 	check = 0;
 	do {
 		check++;
@@ -1479,7 +1523,7 @@ function SNR_noise() { //Measures Cell Noise
 				roiManager("Add");
 				}
 			else {
-				makePoint(0, 0);
+				makeRectangle(0, 0, 2, 2);
 				roiManager("Add");
 				}
 			close();
@@ -1523,6 +1567,7 @@ function SNR_median(array) {
 	}
 
 function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, position 0
+	if (debug_switch) print("[Debug Log]", "\nMeasuring Signal - ROI: " + roi);
 	selectImage(window_MaxIP);
 	roiManager("Select", newArray(0, roi));
 	roiManager("AND");
@@ -1688,10 +1733,10 @@ function SNR_gauss_polygon(xi, yi, window) {
 	for (i = 0; i < cardinal.length; i++) {
 		if (cardinal[i] > 5) cap ++;
 		}
-	if (debug_switch) {
+	/*if (debug_switch) {
 		print("(" + xi + "," + yi + ") bounding:");
 		Array.print(cardinal); //debug
-		}
+		}*/
 	if (cap <= 2 || count_bad == true) {
 		selectImage(window);
 		makePolygon(xi, yi + cardinal[0], xi + cardinal[1] + 1, yi - cardinal[1], xi + cardinal[2] + 1, yi, xi + cardinal[3] + 1, yi + cardinal[3] + 1, xi, yi + cardinal[4] + 1, xi + cardinal[5], yi - cardinal[5], xi + cardinal[6], yi, xi + cardinal[7], yi + cardinal[7]);
@@ -1809,6 +1854,7 @@ function SNR_findmaxima(window, limit) { //Finds local Maxima and outputs the X 
 	}
 
 function SNR_maximasearch() { //Searches until the slope of the spot count levels out
+	if (debug_switch) print("[Debug Log]", "\nMaxima Search");
 	maxima = maxima_start;
 	slope = newArray();
 	slope_second = newArray();
@@ -1856,13 +1902,13 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		slope_second_avg = slope_second_avg / temp;
 		
 		//Debug
-		if (debug_switch) {
+		/*if (debug_switch) {
 			print("\nSlope");
 			Array.print(slope);
 			print("Slope_Second");
 			Array.print(slope_second);
 			print("slope_second_avg: " + slope_second_avg);
-			}
+			}*/
 		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
 	maxima -= slope.length * 0.5 * maxima_inc; //Once the condition has been met drop maxima back 50%
 	updateResults();
@@ -1933,19 +1979,19 @@ function SNR_linearize(xvalues, yvalues) { //Returns an array with locations of 
 	segments = newArray(0, 0); //Initialize array
 	p = 2;
 	while (segments[segments.length - 1] < xvalues.length) { //Keep going until you hit the end
-		if (debug_switch) print("Testing " + segments[segments.length - 1] + " to " + p); //Debug
+		//if (debug_switch) print("Testing " + segments[segments.length - 1] + " to " + p); //Debug
 		do { //From the last entry until the rsquared value drops below the tolerance
 			temp_x = Array.slice(xvalues, segments[segments.length - 1], p);
 			temp_y = Array.slice(yvalues, segments[segments.length - 1], p);
 			Fit.doFit(0, temp_x, temp_y);
 			p += 1;
 			} while (Fit.rSquared > tolerance_maxima && p < xvalues.length - 1);
-		if (debug_switch) Fit.plot;
-		if (debug_switch) setBatchMode('show'); //Debug
+		//if (debug_switch) Fit.plot;
+		//if (debug_switch) setBatchMode('show'); //Debug
 		segments = Array.concat(segments, p-2);
 		p = segments[segments.length - 1] + 2;
 		}
-	if (debug_switch) Array.print(segments);
+	//if (debug_switch) Array.print(segments);
 	segments = Array.slice(segments, 1, segments.length - 1);
 	return segments;
 	}
@@ -1963,6 +2009,7 @@ function SNR_stddev(a, b) {
 	}
 	
 function SNR_results(boo) { //Calculates base SNR and other base values
+	if (debug_switch) print("[Debug Log]", "\nResults");
 	//boo = 1: Results
 	//boo = 2: Bright
 	//boo = 3: Bright_Null
@@ -2052,6 +2099,7 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	}
 
 function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Save individual results
+	if (debug_switch) print("[Debug Log]", "\nSaving Results");
 	//boo = 1: Results
 	//boo = 2: Bright
 	//boo = 3: Bright_Null
