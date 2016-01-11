@@ -1,6 +1,6 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2.4"; //Beta Version
+version = "1.2.5"; //Beta Version
 
 /*
 Latest Version Date: 2015-12-28
@@ -1888,6 +1888,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		roiManager("Select", 0);
 		run("Find Maxima...", "noise=" + maxima + " output=Count");
 		setResult("Maxima", nResults - 1, maxima);
+		temp_count = getResult("Count", nResults - 1);
 		updateResults();
 		
 		//Add slopes to slope array
@@ -1915,41 +1916,11 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 			Array.print(slope_second);
 			print("slope_second_avg: " + slope_second_avg);
 			}*/
-		} while (slope_second_avg > pow(tolerance_maxima, 2))  //Keep going as long as the average second_slope is greater than 4 (default)
-	maxima -= slope.length * 0.5 * maxima_inc; //Once the condition has been met drop maxima back 50%
+		} while (slope_second_avg > pow(tolerance_maxima, 2) && temp_count > 1)  //Keep going as long as the average second_slope is greater than 4 (default)
+	maxima -= slope.length * 0.5 * maxima_inc; //Once the condition has been met drop maxima back 50% of increment
 	updateResults();
 	
-	
-	if (plot == true) { //Create plots for maxima results
-		for (n = maxima + slope.length * 0.5 * maxima_inc; n < maxima + maxima - maxima_start + 40; n += maxima_inc) { //Continue measuring spots
-			selectImage(window_Subtract);
-			roiManager("Select", 0);
-			run("Find Maxima...", "noise=" + n + " output=Count");
-			setResult("Maxima", nResults - 1, n);
-			updateResults();
-			}
-		
-		start = nResults / 2 - 19;
-		if (start < 0) start = 0;
-		stop = nResults / 2 + 20;
-		if (stop > nResults) stop = nResults;
-		xvalues = newArray();
-		yvalues = newArray();
-		for (n = start; n < stop; n++) { //Add Maxima and Count values to an array
-			xvalues = Array.concat(xvalues, getResult("Maxima", n));
-			yvalues = Array.concat(yvalues, getResult("Count", n));
-			}
-		xvalues = Array.slice(xvalues, 1, xvalues.length - 1); //Remove first x value
-		yvalues = Array.slice(yvalues, 1, yvalues.length - 1); //Remove first y value
-		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues); //Make plot
-		Plot.drawLine(maxima, yvalues[yvalues.length - 1], maxima, yvalues[0]); //Draw vertical line at maxima
-		Plot.show();
-		selectWindow("Plot");
-		saveAs("PNG", outDir + "Plots" + File.separator + stripath); //Save plot
-		close();
-		}
 	if (rsquare == true) {
-		temp_count = 2;
 		for (n = maxima + slope.length * 0.5 * maxima_inc; n < maxima + maxima - maxima_start + 10 && temp_count > 1; n += maxima_inc) { //Continue measuring spots
 			selectImage(window_Subtract);
 			roiManager("Select", 0);
@@ -1962,7 +1933,7 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		else tolerance_maxima = 0.9 + (tolerance_maxima/100); //0.95 default
 		xvalues = newArray();
 		yvalues = newArray();
-		for (n = 0; n < nResults - 1; n++) { //Add all Maxima and Count values to an array
+		for (n = 0; n < nResults; n++) { //Add all Maxima and Count values to an array
 			xvalues = Array.concat(xvalues, getResult("Maxima", n));
 			yvalues = Array.concat(yvalues, getResult("Count", n));
 			}
@@ -1978,6 +1949,36 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 		while (segments_lengths[n] != max) n++; //Find the array value that matches the largest segment
 		maxima = xvalues[segments[n]] + maxima_inc;
 		}
+	
+	if (plot == true) { //Create plots for maxima results
+		xvalues = newArray();
+		yvalues = newArray();
+		index = -1;
+		for (n = 0; n < nResults; n++) { //Add Maxima and Count values to arrays
+			xvalues = Array.concat(xvalues, getResult("Maxima", n));
+			yvalues = Array.concat(yvalues, getResult("Count", n));
+			if (xvalues[n] == maxima) index = n;
+			}
+		/*
+		if (index < n - index) index_edge = index - 1;
+		else index_edge = n - index - 1;
+		
+		if (index == -1) {
+			index = nResults/2;
+			index_edge = nResults/2 - 1;
+			}
+		
+		xvalues = Array.slice(xvalues, index - index_edge, index + index_edge); //Trim x values
+		yvalues = Array.slice(yvalues, index - index_edge, index + index_edge); //Trim y values
+		*/
+		Plot.create("Plot", "Maxima", "Count", xvalues, yvalues); //Make plot
+		Plot.drawLine(maxima, yvalues[yvalues.length - 1], maxima, yvalues[0]); //Draw vertical line at maxima
+		Plot.show();
+		selectWindow("Plot");
+		saveAs("PNG", outDir + "Plots" + File.separator + stripath); //Save plot
+		close();
+		}
+	
 	return maxima;
 	}
 	
