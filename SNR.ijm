@@ -1,6 +1,6 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2.3.2"; //Beta Version
+version = "1.2.4"; //Beta Version
 
 /*
 Latest Version Date: 2015-12-28
@@ -1378,6 +1378,7 @@ function SNR_background1() { //Measures background, inverse of noise in median i
 	if (debug_switch) print("[Debug Log]", "\nMeasuring Background - Normal");
 	selectImage(window_Median);
 	run("Duplicate...", " ");
+	run("Enhance Contrast", "saturated=0.01");
 	run("8-bit");
 	run("Select None");
 	roiManager("Select", 0);
@@ -1508,9 +1509,11 @@ function SNR_noise() { //Measures Cell Noise
 	if (debug_switch) print("[Debug Log]", "\nMeasuring Noise");
 	check = 0;
 	do {
+		temp = false;
 		check++;
 		selectImage(window_Median);
 		run("Duplicate...", " ");
+		run("Enhance Contrast", "saturated=0.01");
 		run("8-bit");
 		run("Select None");
 		roiManager("Select", 0);
@@ -1538,18 +1541,21 @@ function SNR_noise() { //Measures Cell Noise
 			roiManager("Select", newArray(0, roiManager("Count") - 1)); //Select Cell Noise
 			roiManager("AND"); //Select regions of Cell Noise
 			}
+			
 		run("Measure");
+		
 		if (noise_method == "Normal" && getResult("Area", nResults - 1) >= (width/pixel_width)*(height/pixel_height)-1 && check < 7) {
 			roiManager("Deselect");
 			roiManager("Select", roiManager("Count") - 1);
 			roiManager("Delete");
 			IJ.deleteRows(nResults-1, nResults-1)
+			temp = true;
 			}
-		} while (noise_method == "Normal" && getResult("Area", nResults - 1) >= (width/pixel_width)*(height/pixel_height)-1 && check < 7);
-	if (check > 1) {
+		} while (noise_method == "Normal" && temp == true && check < 7);
+	/*if (check > 1) {
 		setBatchMode(false);
 		exit("Noise Selection required " + check + " passes");
-		}
+		}*/
 	run("Select None"); //Don't forget to set the File name and description in results and clear ROI manager
 	} //End of Noise function
 
