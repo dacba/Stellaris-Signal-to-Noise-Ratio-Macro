@@ -1,12 +1,12 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-version = "1.2.5"; //Beta Version
+version = "1.2.6"; //Beta Version
 
 /*
-Latest Version Date: 2015-12-28
-Written by Trevor Okamoto, Product Specialist II, Stellaris. Biosearch Technologies Inc.
+Latest Version Date: 2016-02-16
+Written by Trevor Okamoto, Product Specialist II, Stellaris. LGC Biosearch Technologies
 
-ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse
+ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse or tif files
 Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
 
 Tested on ImageJ version 1.50e
@@ -266,7 +266,7 @@ if (debug_switch) run("Text Window...", "name=[Debug Log] width=60 height=16 mon
 
 //Write table headers
 if (debug_switch) print("[Debug Log]", "\nWriting Table Header");
-table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " (" + expansion_method + ", " + noise_method + ", " + background_method_temp + ")"; //-----Add maxima search method-----
+table_head = "Version " + version + " Bounding Stringency: " + tolerance_bounding + " Upward Stringency: " + tolerance_upward + " Maxima Tolerance: " + tolerance_maxima + " Starting Maxima: " + maxima_start + " (" + expansion_method + "/" + noise_method + "/" + background_method_temp + ")"; //-----Add maxima search method-----
 print("[SNR]", table_head);
 print("[Condense]", table_head);
 
@@ -451,6 +451,7 @@ function SNR_main(dir, sub) {
 				saveAs("Text", inDir + "temp.txt");
 				run("Close");
 				info = File.openAsString(inDir + "temp.txt");
+				File.rename(inDir + "temp.txt", savedataDir + stripath + "_Metadata.txt");
 				if (indexOf(info, "SizeC	1") == -1 && indexOf(info, "C=") == -1) { //If multidimension and hasn't been split
 					print("Multi-dimension file detected, splitting");
 					run("Bio-Formats Importer", "open=[" + dir + path + "] color_mode=Grayscale open_all_series split_channels view=Hyperstack stack_order=XYCZT use_virtual_stack");
@@ -2052,6 +2053,10 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 		signoi_bright_stddev = SNR_stddev(getResult("StdDev", nResults - n + 1), getResult("StdDev", nResults - 2));
 		if (SNRmedian_bright > pass_snr && signoi_bright > pass_signoi) pass_bright = "Pass";
 		else pass_bright = "Fail";
+		if (expansion_method == "Gaussian") {
+			signal_bright = getResult("Median", nResults - n + 1); //Rel Signal = Signal Median
+			signal_bright_stddev = getResult("StdDev", nResults - n + 1); //STDDEV
+			}
 		}
 	
 	SNRmean = (getResult("Mean", nResults - n) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
@@ -2065,6 +2070,10 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	signoi_stddev = SNR_stddev(getResult("StdDev", nResults - n), getResult("StdDev", nResults - 2));
 	if (SNRmedian > pass_snr && signoi > pass_signoi) pass = "Pass";
 
+	if (expansion_method == "Gaussian") {
+		signal = getResult("Median", nResults - n); //Rel Signal = Signal Median
+		signal_stddev = getResult("StdDev", nResults - n);
+		}
 	/*
 	Warning Codes
 	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
