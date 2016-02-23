@@ -1,9 +1,9 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-	version = "1.2.6"; //Beta Version
+	version = "1.2.7"; //Beta Version
 	
 	/*
-	Latest Version Date: 2016-02-16
+	Latest Version Date: 2016-02-23
 	Written by Trevor Okamoto, Product Specialist II, Stellaris. LGC Biosearch Technologies
 	
 	ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse or tif files
@@ -84,6 +84,7 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	debug_switch = false; //Enables all debug options
 	custom_lut = false; //Assign lut values to images
 	ztrim = false; //Trim z-stack
+	enable_hash = false;
 	background_method = 1; //Background method
 	reanalysis = true;
 	
@@ -129,10 +130,10 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	//Dialog
 	Dialog.create("Spot Processor");
 	
-	Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Peaks"));
+	Dialog.addChoice("Signal Masking Option:", newArray("Normal", "Force Polygon", "Gaussian", "Peaks"/*, "SMLM Fit"*/));
 	Dialog.addChoice("Noise Masking Option:", newArray("Normal", "None"));
 	Dialog.addChoice("Background Masking Option:", newArray("Normal", "Histogram Peak", "Gaussian Histogram Peak", "Bottom 10%"));
-	Dialog.addCheckboxGroup(3, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack", "Re-analyze Images"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim, reanalysis));
+	Dialog.addCheckboxGroup(4, 3, newArray("Sum Intensity", "Peak Intensity", "Plot Maxima Results", "User Defined Area", "Signal Filtering", "Advanced Options", "Custom LUT", "Auto Trim Z-stack", "Re-analyze Images", "Mark Unmeasured Areas"), newArray(sum_intensity, peak_intensity, plot, user_area, filter, advanced, custom_lut, ztrim, reanalysis, enable_hash));
 	Dialog.show();
 	
 	//Retrieve Choices
@@ -148,6 +149,7 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	custom_lut = Dialog.getCheckbox();
 	ztrim = Dialog.getCheckbox();
 	reanalysis = Dialog.getCheckbox();
+	enable_hash = Dialog.getCheckbox();
 	
 	maxima_start = maxima;
 	tolerance_drop = (tolerance_bounding / 5) + 0.89;
@@ -322,6 +324,7 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 		File.makeDirectory(mergeDir + "Max 8-bit" + File.separator);
 		File.makeDirectory(mergeDir + "Median" + File.separator);
 		File.makeDirectory(mergeDir + "Subtract" + File.separator);
+		File.makeDirectory(mergeDir + "Metadata" + File.separator);
 	}
 	
 	//RUN IT!
@@ -444,12 +447,17 @@ function SNR_main(dir, sub) {
 			//For raw files
 			else if (endsWith(list[i], ".nd2") || endsWith(list[i], ".tif")) {
 				print("------------\nFile: " + path);
-				run("Bio-Formats Importer", "open=[" + dir + path + "] display_metadata view=[Metadata only]");
-				selectWindow("Original Metadata - " + list[i]);
-				saveAs("Text", inDir + "temp.txt");
-				run("Close");
-				info = File.openAsString(inDir + "temp.txt");
-				File.rename(inDir + "temp.txt", savedataDir + stripath + "_Metadata.txt");
+				if (File.exists(mergeDir + "Metadata" + File.separator + stripath + ".txt")) {
+					info = File.openAsString(mergeDir + "Metadata" + File.separator + stripath + ".txt");
+				}
+				else {
+					run("Bio-Formats Importer", "open=[" + dir + path + "] display_metadata view=[Metadata only]");
+					selectWindow("Original Metadata - " + list[i]);
+					saveAs("Text", inDir + "temp.txt");
+					run("Close");
+					info = File.openAsString(inDir + "temp.txt");
+					File.rename(inDir + "temp.txt", mergeDir + "Metadata" + File.separator + stripath + ".txt");
+				}
 				if (indexOf(info, "SizeC	1") == -1 && indexOf(info, "C=") == -1) { //If multidimension and hasn't been split
 					print("Multi-dimension file detected, splitting");
 					run("Bio-Formats Importer", "open=[" + dir + path + "] color_mode=Grayscale open_all_series split_channels view=Hyperstack stack_order=XYCZT use_virtual_stack");
@@ -756,7 +764,11 @@ function SNR_main(dir, sub) {
 			spot_count = q;
 			//Expand dots
 			if (debug_switch) print("[Debug Log]", "\nSpot Expansion");
-			if (expansion_method == "Gaussian") { //If gaussian is selected run the gaussian fitting
+			if (expansion_method == "SMLM Gaussian") { //If gaussian is selected run the SMLM gaussian fitting
+				if (debug_switch) print("[Debug Log]", "\nSMLM Gaussian");
+				exit("Nothing here yet");
+			}
+			else if (expansion_method == "Gaussian") { //If gaussian is selected run the gaussian fitting
 				if (debug_switch) print("[Debug Log]", "\nGaussian");
 				amplitude = newArray();
 				for (q = 0; q < x_values.length && q < 10000; q++) {
@@ -1342,26 +1354,17 @@ function SNR_main(dir, sub) {
 
 function SNR_drawHash(space, roi) {
 	if (debug_switch) print("[Debug Log]", "\nDrawing hash marks\n");
-	roiManager("Select", roi);
-	getSelectionBounds(x, y, draw_width, draw_height);
-	setColor(170);
-	start = roiManager("Count");
-	inc = space*1.414;
-	//Draw hash across y=0
-	for (n = 0; n*inc < draw_width+draw_height; n++) {
-		makeLine(x-draw_height+n*inc, y+draw_height, x+n*inc, y);
-		roiManager("Add");
-		if (debug_switch) print("[Debug Log]", ".");
+	if (enable_hash == true) {
+		roiManager("Select", roi);
+		getSelectionBounds(x, y, draw_width, draw_height);
+		setColor(170);
+		start = roiManager("Count");
+		inc = space*1.414;
+		for (n = 0; n*inc < draw_width+draw_height; n++) {
+			drawLine(x-draw_height+n*inc, y+draw_height, x+n*inc, y);
+			if (debug_switch) print("[Debug Log]", ".");
+		}
 	}
-	//Finish hash across x=draw_width
-	lines = Array.slice(Array.getSequence(roiManager("Count")), start);
-	roiManager("Select", lines);
-	//exit("Check OR function");
-	roiManager("OR");
-	roiManager("Add");
-	roiManager("Select", newArray(roi, roiManager("Count")-1));
-	roiManager("AND");
-	fill;
 	run("Select None");
 }
 
@@ -1547,7 +1550,7 @@ function SNR_noise() { //Measures Cell Noise
 			roiManager("Deselect");
 			roiManager("Select", roiManager("Count") - 1);
 			roiManager("Delete");
-			IJ.deleteRows(nResults-1, nResults-1)
+			IJ.deleteRows(nResults-1, nResults-1);
 			temp = true;
 		}
 	} while (noise_method == "Normal" && temp == true && check < 7);
@@ -1573,16 +1576,23 @@ function SNR_median(array) {
 
 function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, position 0
 	if (debug_switch) print("[Debug Log]", "\nMeasuring Signal - ROI: " + roi);
-	selectImage(window_MaxIP);
-	roiManager("Select", newArray(0, roi));
-	roiManager("AND");
-	run("Measure");
-	run("Select None");
-	if (expansion_method == "Gaussian") {
-		if (roi == 1) Array.getStatistics(amplitude, s_min, s_max, s_mean, s_stdDev);
-		else if (roi == 3) Array.getStatistics(amplitude_high, s_min, s_max, s_mean, s_stdDev);
+	if (expansion_method != "Gaussian") {
+		selectImage(window_MaxIP);
+		roiManager("Select", newArray(0, roi));
+		roiManager("AND");
+		run("Measure");
+		run("Select None");
+		}
+	else { //Gaussian
+		if (roi == 1) {
+			Array.getStatistics(amplitude, s_min, s_max, s_mean, s_stdDev);
+			s_med = SNR_median(amplitude);
+		}
+		else if (roi == 3) {
+			Array.getStatistics(amplitude_high, s_min, s_max, s_mean, s_stdDev);
+			s_med = SNR_median(amplitude_high);
+		}
 		else exit("Gaussian ROI is incorrect, ROI: " + roi);
-		s_med = SNR_median(amplitude);
 		setResult("Area", nResults - 1, area_cutoff + 1);
 		setResult("Mean", nResults - 1, s_mean);
 		setResult("StdDev", nResults - 1, s_stdDev);
@@ -2049,13 +2059,13 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 		SNRmedian_bright = signal_bright / noise; //SNR Median = (Signal Median - Back Median) / (Noise Median - Back Median)
 		signoi_bright = getResult("Median", nResults - n + 1) - getResult("Median", nResults - 2);
 		signoi_bright_stddev = SNR_stddev(getResult("StdDev", nResults - n + 1), getResult("StdDev", nResults - 2));
-		if (SNRmedian_bright > pass_snr && signoi_bright > pass_signoi) pass_bright = "Pass";
-		else pass_bright = "Fail";
 		if (expansion_method == "Gaussian") {
 			signal_bright = getResult("Median", nResults - n + 1); //Rel Signal = Signal Median
 			signal_bright_stddev = getResult("StdDev", nResults - n + 1); //STDDEV
 		}
-		}
+		if (SNRmedian_bright > pass_snr && signoi_bright > pass_signoi) pass_bright = "Pass";
+		else pass_bright = "Fail";
+	}
 	
 	SNRmean = (getResult("Mean", nResults - n) - getResult("Mean", nResults - 1)) / (getResult("Mean", nResults - 2) - getResult("Mean", nResults - 1)); //SNR Mean = (Signal Mean - Back Mean) / (Noise Mean - Back Mean)
 	signal = getResult("Median", nResults - n) - getResult("Median", nResults - 1); //Rel Signal = Signal Median - Back Median
@@ -2066,12 +2076,12 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	cv = getResult("StdDev", nResults - n) / getResult("Mean", nResults - n); //Coefficient of Variation - Signal
 	signoi = getResult("Median", nResults - n) - getResult("Median", nResults - 2);
 	signoi_stddev = SNR_stddev(getResult("StdDev", nResults - n), getResult("StdDev", nResults - 2));
-	if (SNRmedian > pass_snr && signoi > pass_signoi) pass = "Pass";
-	
 	if (expansion_method == "Gaussian") {
 		signal = getResult("Median", nResults - n); //Rel Signal = Signal Median
 		signal_stddev = getResult("StdDev", nResults - n);
 	}
+	if (SNRmedian > pass_snr && signoi > pass_signoi) pass = "Pass";
+	
 	/*
 	Warning Codes
 	1 = Bad Coefficient of Variation (> 0.15 for Noise and Background)
@@ -2153,7 +2163,7 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		if (expansion_method == "Force Polygon") line += ", Polygon";
 		else if (expansion_method == "Normal" && spot_count + filtered_spots <= normal_limit) line += ", Polygon";
 		else if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
-		else if (expansion_method == "Gaussian") line += ", Gaussian";
+		else line += ", " + expansion_method;
 		line += "," + warnings;
 		print("[SNR]", line);
 		comb = line;
@@ -2236,7 +2246,7 @@ function SNR_save_results(boo) { //Save Results to Raw and Condensed Tables, Sav
 		if (expansion_method == "Force Polygon") line += ", Polygon";
 		else if (expansion_method == "Normal" && spot_count + filtered_spots <= normal_limit) line += ", Polygon";
 		else if (expansion_method == "Normal" && spot_count + filtered_spots > normal_limit) line += ", Ellipse";
-		else if (expansion_method == "Gaussian") line += ", Gaussian";
+		else line += ", " + expansion_method;
 		line += "," + warnings;
 		print("[Condense]", line);
 	}
