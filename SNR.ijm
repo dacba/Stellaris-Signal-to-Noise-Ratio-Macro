@@ -1,6 +1,6 @@
 
 macro "Calculate Signal to Noise Ratio Beta...[c]" {
-	version = "1.2.7"; //Beta Version
+	version = "1.2.7.1"; //Beta Version
 	
 	/*
 	Latest Version Date: 2016-02-23
@@ -20,6 +20,7 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	run("Set Measurements...", "area mean standard min median redirect=None decimal=3");
 	run("Input/Output...", "jpeg=85 gif=-1 file=.csv save_column");
 	setFont("SansSerif", 22);
+	run("Bio-Formats Macro Extensions");
 	print("\\Clear");
 	roiManager("reset");
 	run("Collect Garbage");
@@ -68,7 +69,6 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	
 	
 	//Default Variables
-	tif_ready = false; //Determines if pre-saved tif files are available
 	tolerance_bounding = 0.2; //Tolerance for ellipse bounding. Higher means smaller ellipsis 
 	tolerance_upward = 0.8; //Tolerates upward movement (0 means any upward movement will be tolerated, 1 means tolerance will be the same as downward movement)
 	maxima = 20; //Beginning Maxima value
@@ -81,12 +81,12 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	filter = true; //Check to filter spots
 	user_area = false; //Check for user defined area
 	user_area_rev = false; //Check if to invert selection
-	debug_switch = false; //Enables all debug options
+	debug_switch = false; //Enables all debug output
 	custom_lut = false; //Assign lut values to images
 	ztrim = false; //Trim z-stack
-	enable_hash = false;
+	enable_hash = true; //Draws hash marks on unmeasured areas
 	background_method = 1; //Background method
-	reanalysis = true;
+	reanalysis = true; //Force reanalysis on images
 	
 	//Advanced Options
 	advanced = false;
@@ -316,21 +316,32 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	File.makeDirectory(savedataDir);
 	mergeDir = inDir + "Out-Merged Images" + File.separator;
 	if (plot == true) File.makeDirectory(outDir + "Plots" + File.separator); //Create Plots inDirectory
-	tif_ready = File.exists(mergeDir + "log.txt");
-	if (recreate_tif == true) tif_ready = false;
-	if (tif_ready == false) { //Create Merged images folder if doesn't already exist
-		File.makeDirectory(mergeDir);
-		File.makeDirectory(mergeDir + "Max" + File.separator);
-		File.makeDirectory(mergeDir + "Max 8-bit" + File.separator);
-		File.makeDirectory(mergeDir + "Median" + File.separator);
-		File.makeDirectory(mergeDir + "Subtract" + File.separator);
-		File.makeDirectory(mergeDir + "Metadata" + File.separator);
-	}
+	
+	//Create Merged images folder if doesn't already exist
+	File.makeDirectory(mergeDir);
+	File.makeDirectory(mergeDir + "Max" + File.separator);
+	File.makeDirectory(mergeDir + "Max 8-bit" + File.separator);
+	File.makeDirectory(mergeDir + "Median" + File.separator);
+	File.makeDirectory(mergeDir + "Subtract" + File.separator);
+	File.makeDirectory(mergeDir + "Metadata" + File.separator);
+	
 	
 	//RUN IT!
 	if (debug_switch) print("[Debug Log]", "\nMain Process Starting");
 	total_start = getTime();
-	if (File.exists(mergeDir + "log.txt")) File.append("----------\nStarted " + version + "...\n" + output_name, mergeDir + "log.txt");
+	getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, sec, msec);
+	TimeString = ", Date: ";
+	if (month < 10) TimeString = TimeString + "0";
+	TimeString = TimeString + month + "-";
+	if (dayOfMonth < 10) TimeString = TimeString + "0";
+	TimeString = TimeString + dayOfMonth + "-" + year + " ";
+	if (hour < 10) {TimeString = TimeString + "0";}
+	TimeString = TimeString + hour + ":";
+	if (minute < 10) {TimeString = TimeString + "0";}
+	TimeString = TimeString + minute;
+	if (File.exists(mergeDir + "log.txt")) {
+		File.append("----------\nStarted " + version + TimeString + "...\n" + output_name, mergeDir + "log.txt");
+	}
 	final_file_list = "";
 	final_file_list = SNR_main(inDir, "");
 	if (debug_switch) print("[Debug Log]", "\nMain Process Complete");
@@ -380,19 +391,29 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	
 	if (File.exists(mergeDir + "log.txt") == false) {
 		File.saveString(inDir + "\n----------" + final_file_list + "\n", mergeDir + "log.txt");
-		File.append("==========\n \nStarted " + version + "...\n" + output_name, mergeDir + "log.txt");
+		File.append("----------\nStarted " + version + TimeString + "...\n" + output_name, mergeDir + "log.txt");
 	}
 	
+	getDateAndTime(year, month, dayOfWeek, dayOfMonth, hour, minute, sec, msec);
+	TimeString = ", Date: ";
+	if (month < 10) TimeString = TimeString + "0";
+	TimeString = TimeString + month + "-";
+	if (dayOfMonth < 10) TimeString = TimeString + "0";
+	TimeString = TimeString + dayOfMonth + "-" + year + " ";
+	if (hour < 10) {TimeString = TimeString + "0";}
+	TimeString = TimeString + hour + ":";
+	if (minute < 10) {TimeString = TimeString + "0";}
+	TimeString = TimeString + minute;
+	
 	if (debug_switch) print("[Debug Log]", "\nClean up");
-	File.delete(inDir + "temp.txt");
-	File.append("...Completed", mergeDir + "log.txt");
+	temp = File.delete(inDir + "temp.txt");
+	File.append("...Completed, " + TimeString, mergeDir + "log.txt");
 	run("Collect Garbage");
 	print("-- Done --");
 	showStatus("Finished.");
 } //end of macro
 
 function SNR_main(dir, sub) {
-	run("Bio-Formats Macro Extensions");
 	list = getFileList(dir + sub);//get file list
 	final_file_list = "";
 	img_files = 0;
@@ -460,32 +481,35 @@ function SNR_main(dir, sub) {
 				}
 				if (indexOf(info, "SizeC	1") == -1 && indexOf(info, "C=") == -1) { //If multidimension and hasn't been split
 					print("Multi-dimension file detected, splitting");
-					run("Bio-Formats Importer", "open=[" + dir + path + "] color_mode=Grayscale open_all_series split_channels view=Hyperstack stack_order=XYCZT use_virtual_stack");
-					print("Saving Splits");
-					split_start = getTime();
-					for (n = 1; nImages > 0; n++) {
-						selectImage(1);
-						saveAs("tif", dir + getTitle() + ".tif");
-						close;
-						print(nImages + " remaining");
-						estimate = 0;
-						estimate = round(((getTime() - split_start) / n) * nImages);
-						if (estimate == NaN) estimate = 0;
-						if (estimate >= 55000) { //If more than one minute
-							estimate_array = SNR_timediff(0, estimate);
-							print(SNR_natural_time("Time Remaining: ", estimate_array));
+					if(File.exists(dir + "Out-Multidimension Files" + File.separator + path) == false) {
+						run("Bio-Formats Importer", "open=[" + dir + path + "] color_mode=Grayscale open_all_series split_channels view=Hyperstack stack_order=XYCZT use_virtual_stack");
+						print("Saving Splits");
+						split_start = getTime();
+						for (n = 1; nImages > 0; n++) {
+							selectImage(1);
+							if (File.exists(dir + getTitle() + ".tif") == false) saveAs("tif", dir + getTitle() + ".tif");
+							close;
+							print(nImages + " remaining");
+							estimate = 0;
+							estimate = round(((getTime() - split_start) / n) * nImages);
+							if (estimate == NaN) estimate = 0;
+							if (estimate >= 55000) { //If more than one minute
+								estimate_array = SNR_timediff(0, estimate);
+								print(SNR_natural_time("Time Remaining: ", estimate_array));
+							}
+							else {
+								print("Time Remaining: " + round(estimate / 10000)*10 + " seconds");
+							}
 						}
-						else {
-							print("Time Remaining: " + round(estimate / 10000)*10 + " seconds");
+						//Move multidimension file to separate folder
+						run("Close All");
+						File.makeDirectory(dir + "Out-Multidimension Files" + File.separator);
+						File.copy(dir + path, dir + "Out-Multidimension Files" + File.separator + path);
+						i--;
+						//exit("This Macro is only compatible with files that contain a single Z-stack.\nYour file has been split\nPlease restart the program.");
 						}
-					}
-					//Move multidimension file to separate folder
-					close;
-					File.makeDirectory(dir + File.separator + "Out-Multi-dimension Files" + File.separator);
-					if(File.rename(dir + path, dir + File.separator + "Out-Multi-dimension Files" + File.separator + path) == false) exit("Could not move Multi-dimension file " + path);
-					list = getFileList(dir + sub);
-					i--;
-					//exit("This Macro is only compatible with files that contain a single Z-stack.\nYour file has been split\nPlease restart the program.");
+						else print("File already split, skipping");
+						list = getFileList(dir + sub);
 				}
 				else { //If not multidimension or has been split, assign channel
 					if (debug_switch) print("[Debug Log]", "\nDetermining Channel");
@@ -1582,7 +1606,7 @@ function SNR_signal(roi) { //Measures Signal, ensure dots is in ROI manager, pos
 		roiManager("AND");
 		run("Measure");
 		run("Select None");
-		}
+	}
 	else { //Gaussian
 		if (roi == 1) {
 			Array.getStatistics(amplitude, s_min, s_max, s_mean, s_stdDev);

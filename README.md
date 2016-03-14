@@ -15,11 +15,9 @@ This program is designed as a quick and automatic measurement of Stellaris RNA F
 
 How it works
 ------------
-The user is presented with tolerance and stringency options to tweak the behavior of the macro and then queried for the folder location of the images the user wishes to analyze.
-
 Files are opened by the macro for processing.  The image stacks are compressed using Max and Median intensity projection methods.  The local maxima for the signal is found.  Using the local maxima locations, a mask is created that selects all signal.  Local thresholding selects Intra-cellular Noise.
 
-The results calculated are the relative Signal brightness, Noise Brightness and Signal to Noise Ratio. After, three page tiff file is created of the max intensity merge image, selections, and median intensity merge image for troubleshooting and verification purposes.
+The results calculated are the relative Signal brightness, Noise Brightness and Signal to Noise Ratio. After, a three page tiff file is created of the max intensity merge image, selections, and median intensity merge image for troubleshooting and verification purposes.
 
 Running the Macro
 -----

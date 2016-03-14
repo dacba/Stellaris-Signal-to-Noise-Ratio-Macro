@@ -1,6 +1,6 @@
 #Signal to Noise Ratio Macro Changelog
 
-#### Latest Version: <i>0.5.7.2</i>
+#### Latest Version: <i>1.2.7</i>
 
 ## Version 0.1
 ##### January 30, 2015
@@ -288,3 +288,82 @@
 ##### July 17, 2015
 * Beta Release for testing
 * No significant changes from previous version
+
+### Beta Version 1.1
+##### September 1, 2015
+* Changed CSV delimiter to "," from ", "
+* Added Z-trim
+* Added Signal minus Noise measurement
+* Results are now saved per image and loaded on subsequent runs
+* Improved raw image handling
+* Added support structure for multidimensional images
+
+### Beta Version 1.2
+##### November 10, 2015
+* Fixed 6D acquisition to know which channels are present
+* Properly detects 6D images and separates image files
+* Remove Score from output images
+* Added Pass/Fail criters
+	* Set to SNR of 4 and Signal minus Noise of 200
+* Z-trim outputs top and bottom of image if selected
+* ImageJ log outputs channel name for troubleshooting
+
+### Beta Version 1.2.1
+##### December 17, 2015
+* Fixed 6D compatibility
+* Added Background selection options
+	* Bottom 10%
+	* Peak of histogram
+	* Gaussian fit peak of histogram
+* Fixed crash when trying to add empty selection to ROI manager
+* Moved tolerance sliders to advanced option menu
+
+### Beta Version 1.2.3
+##### December 22, 2015
+* Skipped version 1.2.2
+* Rounds results to nearest whole number in output image
+* SNR rounds to nearest hundreth
+* Standard Deviation added to output files and images
+* Areas not selected for anything are marked with white hash marks
+* Added peaks expansion method, measures Gaussian amplitude per spot
+
+### Beta Version 1.2.3.1
+##### December 28, 2015
+* Added check box to force reanalysis of images
+* Fixed crash where background function selected the entire image
+* Enabled Linear Maxima Fit by default
+* Renamed background masking option from "Inverse of Noise" to "Normal"
+* Updated table header for clarity
+* Enabled Gaussian blur for Median Merge
+* Disabled Scale Reset
+* Fixed bug where nothing was selected for Noise
+* Fixed bug where bright signal standard deviation was missing
+* Channel assignment now works based on detected channel number
+	* Non Nikon metadata will result in an "UNknown" channel
+* New function - converts numbers to spoken word e.g. 23 -> Twenty Three
+
+### Beta Version 1.2.4
+##### January 11, 2016
+* Fixed bug where 8-bit image would be very low contrast
+
+### Beta Version 1.2.5
+##### January 11, 2016
+* Plot maxima will plot the right end of the linear fit portion that gets added on
+* Basic maxima search will halt once it reaches one spot
+
+### Beta Version 1.2.6
+##### February 16, 2016
+* Updated "Written By"
+* Changed table header to use '/' instead of ','
+* Metadata is now saved in "Saved Data" folder
+* Gaussian Fit does not subtract background from calculation
+
+### Beta Version 1.2.7
+##### February 23, 2016
+* Reindent and newline fixes
+* Metadata automatically saved for future use (even DAPI)
+* Hash function optimized
+* Hash marks now optional
+* SMLM Gaussian fit framework added
+* Small optimization to signal measuring function
+* Bug fixes in regards to saving results
