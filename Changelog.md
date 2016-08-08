@@ -367,3 +367,18 @@
 * SMLM Gaussian fit framework added
 * Small optimization to signal measuring function
 * Bug fixes in regards to saving results
+
+### Beta Version 1.2.7.1
+##### March, 2016
+* Fixed multipoint support, again
+* Forced re-create merged folders enabled by default
+* Logs now have time stamps
+* Updated Readme
+
+### Beta Version 1.2.9
+##### March, 2016
+* Maxima search increment now scales with pixel range
+* "Normal" signal expansion method is now set to polygon only
+* "SNR" now refers to the Median SNR, not the Mean
+* Noise expansion uses microns instead of pixels
+* Deleted unused findmaxima function

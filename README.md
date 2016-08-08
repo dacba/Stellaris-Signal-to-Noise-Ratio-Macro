@@ -44,18 +44,25 @@ Running the Macro
 Input
 -----
 
-###Bounding and Spot Count Alterations
-##### Bounding Stringency
-- Default = 0.2
-- Determines the stringency of the signal bounding functions, higher meaning more strict
-
-##### Upward Stringency
-- Default = 0.8
-- Determines the stringency of the signal bounding function for upwards movement
-
-##### Maxima Tolerance
-- Default = 8
-- Determines the number of spots to analyze
+###Masking Options
+#####Signal Masking Option
+* Determines the algorithm used to mask signal
+* Default is "Normal" or 8 point polygon
+#####Noise Masking Option
+* Determines the algorithm used to mask noise
+* Default is "Normal"
+* Other option is none
+	* Selecting "None" will compare signal to the average of the entire image (excluding the signal)
+#####Background Masking Option
+* Determines the algorithm used to mask background
+* Default is "Normal"
+* Other options:
+	* Histogram Peak
+		* Selects all pixels below the peak in the histogram
+	* Gaussian Histogram Peak
+		* Fits a gaussian curve to the histogram and selects all pixels below that value
+	* Bottom 10%
+		* Selects the bottom 10% of pixels
 
 ###Other Options
 
@@ -74,6 +81,18 @@ Input
 	* Spots significantly lower than the mean are filtered out
 * Spots significantly higher than the mean are analyzed separately
 	* Usually separates transcription bursts or autofluorescent spots
+#####Custom LUT
+* Allows the user to define custom LUT values for the final outputted images
+
+##### Auto Trim Z-stack
+* Enables trimming of images in the z-stack without any signal
+
+##### Re-analyze images
+* Analyzes images even if they have been analyzed before
+
+##### Mark Unmeasured Areas
+* If enabled, all areas not counted towards either noise, signal, or background will be marked with diagonal hashes
+
 ##### Advanced Options
 * When enabled, a second dialog will appear containing advanced options and tweaks
 * It's highly recommended to not change these options
@@ -85,7 +104,19 @@ Input
 	* Disable Warning codes
 		* If you would rather not get any warning codes in the output csv file, enable this option
 
-#### Output folder - "Out-SNRatio"
+* Bounding Stringency
+	* Default = 0.2
+	* Determines the stringency of the signal bounding functions, higher meaning more strict
+
+* Upward Stringency
+	- Default = 0.8
+	- Determines the stringency of the signal bounding function for upwards movement
+
+* Maxima Tolerance
+	- Default = 8
+	- Determines the number of spots to analyze
+
+### Output folder - "Out-SNRatio"
  1. Contains the merged images from analysis
 	* Useful for troubleshooting issues with signal or noise selections
  	* Merged Images are prefixed with their folder path from the root folder
@@ -103,7 +134,7 @@ Input
 	* This macro was developed on Windows 7 for Windows 7 and has not been tested on other versions of ImageJ/Fiji, proceed with caution
 2. Incompatible ImageJ Version
 	* ImageJ version 1.49n is known to not work properly with this macro
-	* Results may not save correctly
+	* Results may not save correctly if using other versions
 3. Tolerances outside of recommended ranges
 	* One or more of your input settings were outside of the recommended ranges
 	* Refer to the recommended ranges in the window for help

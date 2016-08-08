@@ -6,6 +6,14 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	Latest Version Date: 2016-02-23
 	Written by Trevor Okamoto, Product Specialist II, Stellaris. LGC Biosearch Technologies
 	
+	Copyright (c) 2016 Trevor Okamoto
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	
 	ImageJ/Fiji Macro for analyzing single molecule RNA FISH images from a Nikon Eclipse or tif files
 	Separates the Signal from the surrounding cellular noise, and the background from the cellular noise.  These segments are measured for their mean and median brightness values.  These values are used to calculate the relative signal and noise, and from that the signal to noise ratio.  Other options are available such as spot filtering, and tolerance tweaking.
 	
@@ -124,8 +132,8 @@ macro "Calculate Signal to Noise Ratio Beta...[c]" {
 	max_cy55 = 0;
 	
 	
-	area_cutoff = 5.22; //Area (micron^2) the regular selection must be to be counted, specifically 50 bright spots averaging 3x3 pixels
-	area_cutoff_bright = 5.22; //Area (micron^2) the bright selection must be to be counted
+	area_cutoff = 1; //Area (micron^2) the regular selection must be to be counted, specifically 10 3x3 px areas
+	area_cutoff_bright = 1; //Area (micron^2) the bright selection must be to be counted
 	
 	
 	//Dialog
@@ -527,7 +535,7 @@ function SNR_main(dir, sub) {
 							if (indexOf(info, "Name	DAPI") > -1) channel = "DAPI";
 						}
 						else if (channel_num > 1) { //If ND acquisition
-							print(SNR_spelt_number(channel_num) + " Other Channel(s) Detected");
+							print(SNR_spelt_int(channel_num) + " Other Channel(s) Detected");
 							//Find C=
 							temp = indexOf(info, "C=");
 							C_num = parseInt(substring(info, temp + 2, temp + 3));
@@ -548,7 +556,7 @@ function SNR_main(dir, sub) {
 						}
 						else {
 							print("Error: Metadata is missing \"uiGroupCount\"");
-							//print(SNR_spelt_number(channel_num) + " Channel(s) Detected");
+							//print(SNR_spelt_int(channel_num) + " Channel(s) Detected");
 							//exit();
 						}
 					}
@@ -842,15 +850,6 @@ function SNR_main(dir, sub) {
 			
 			x_values_high = newArray();
 			y_values_high = newArray();
-			north_high = newArray();
-			northeast_high = newArray();
-			east_high = newArray();
-			southeast_high = newArray();
-			south_high = newArray();
-			southwest_high = newArray();
-			west_high = newArray();
-			northwest_high = newArray();
-			mean_intensity_high = newArray();
 			
 			if (filter == true) { //Filter spots based on MADe settings
 				if (debug_switch) print("[Debug Log]", "\nFiltering Spots");
@@ -907,12 +906,13 @@ function SNR_main(dir, sub) {
 				//Masking
 				area_reg = 0;
 				area_bright = 0;
+				spot_count = 0;
 				for (q = 0; q < mean_intensity.length; q++) { //Select spots that should not be included in the regular measurement
-					if (mean_intensity[q] < low_cutoff || peak_intensity[q] < noise_max || area_all[q] < 0.023) { //Remove low spots
+					if (mean_intensity[q] < low_cutoff || peak_intensity[q] < noise_max || area_all[q] <= 0.023) { //Remove dim spots and small spots (2px)
 						//print("Low " + mean_intensity[q] + " / " + low_cutoff);
 						low_counter = Array.concat(low_counter, q); //Mask for low cutoff
 						filtered_spots++;
-						spot_count--;
+						//spot_count--;
 					}
 					else if (mean_intensity[q] > high_cutoff) {  //Separate high spots
 						//print("High " + mean_intensity[q] + " / " + high_cutoff);
@@ -920,18 +920,11 @@ function SNR_main(dir, sub) {
 						x_values_high = Array.concat(x_values_high, x_values[q]);
 						y_values_high = Array.concat(y_values_high, y_values[q]);
 						area_bright += area_all[q];
-						spot_count--;
-						/*north_high = Array.concat(north_high, north[q]);
-						northeast_high = Array.concat(northeast_high, northeast[q]);
-						east_high = Array.concat(east_high, east[q]);
-						southeast_high = Array.concat(southeast_high, southeast[q]);
-						south_high = Array.concat(south_high, south[q]);
-						southwest_high = Array.concat(southwest_high, southwest[q]);
-						west_high = Array.concat(west_high, west[q]);
-						northwest_high = Array.concat(northwest_high, northwest[q]);
-						mean_intensity_high = Array.concat(mean_intensity_high, mean_intensity[q]);*/
 					}
-					else if (area_all[q] > 0.023) area_reg += area_all[q];
+					else if (area_all[q] > 0.023) {
+						area_reg += area_all[q];
+						spot_count++;
+						}
 					//else print("Regular " + mean_intensity[q]);
 				}
 				
@@ -1124,7 +1117,7 @@ function SNR_main(dir, sub) {
 				else array_results[s] = round(array_results[s]);
 			}
 			
-			//Prep Images
+			//Prep Imagesf
 			if (debug_switch) print("[Debug Log]", "\nPrep Images");
 			selectImage(window_Subtract);
 			run("Enhance Contrast", "saturated=0.01");
@@ -1864,7 +1857,8 @@ function SNR_maximasearch() { //Searches until the slope of the spot count level
 	run("Find Maxima...", "noise=" + maxima + " output=Count");
 	setResult("Maxima", nResults - 1, maxima);
 	maxima_inc = (max-min)/maxima_factor; //Set maxima increment to 100th of the image range
-	print("Maxima Increment: " + maxima_inc);
+	if (maxima_inc < 10) maxima_inc = 10;
+	//print("Maxima Increment: " + maxima_inc);
 	maxima += maxima_inc;
 	
 	//Second run
@@ -2088,6 +2082,9 @@ function SNR_results(boo) { //Calculates base SNR and other base values
 	
 	SNR_save_results(boo);
 	
+	print(pass + " S-N = " + signoi + " SNR = " + SNR);
+	if (boo == 2) print("Bright: " + pass_bright + " S-N = " + signoi_bright + " SNR = " + SNR_bright);
+	
 	return newArray(SNR, SNR_bright, signal, signal_stddev, noise, noise_stddev, signal_bright, signal_bright_stddev, signoi, signoi_stddev, signoi_bright, signoi_bright_stddev);
 }
 
@@ -2254,7 +2251,7 @@ function SNR_natural_time(prefix, time) { //Accepts a prefix and a time array of
 	return temp;
 }
 
-function SNR_spelt_number(int) {
+function SNR_spelt_int(int) {
 	sign = false;
 	if (int < 0) {
 		sign = true;
@@ -2291,51 +2288,53 @@ function SNR_spelt_number(int) {
 	}
 	else if (int < 100) {
 		if (floor(int) == 20) result = "Twenty";
-		else if (int > 20 && int < 30) result = "Twenty " + SNR_spelt_number(int%10);
+		else if (int > 20 && int < 30) result = "Twenty " + SNR_spelt_int(int%10);
 		else if (floor(int) == 30) result = "Thirty";
-		else if (int > 30 && int < 40) result = "Thirty " + SNR_spelt_number(int%10);
+		else if (int > 30 && int < 40) result = "Thirty " + SNR_spelt_int(int%10);
 		else if (floor(int) == 40) result = "Fourty";
-		else if (int > 40 && int < 50) result = "Fourty " + SNR_spelt_number(int%10);
+		else if (int > 40 && int < 50) result = "Fourty " + SNR_spelt_int(int%10);
 		else if (floor(int) == 50) result = "Fifty";
-		else if (int > 50 && int < 60) result = "Fifty " + SNR_spelt_number(int%10);
+		else if (int > 50 && int < 60) result = "Fifty " + SNR_spelt_int(int%10);
 		else if (floor(int) == 60) result = "Sixty";
-		else if (int > 60 && int < 70) result = "Sixty " + SNR_spelt_number(int%10);
+		else if (int > 60 && int < 70) result = "Sixty " + SNR_spelt_int(int%10);
 		else if (floor(int) == 70) result = "Seventy";
-		else if (int > 70 && int < 80) result = "Seventy " + SNR_spelt_number(int%10);
+		else if (int > 70 && int < 80) result = "Seventy " + SNR_spelt_int(int%10);
 		else if (floor(int) == 80) result = "Eighty";
-		else if (int > 80 && int < 90) result = "Eighty " + SNR_spelt_number(int%10);
+		else if (int > 80 && int < 90) result = "Eighty " + SNR_spelt_int(int%10);
 		else if (floor(int) == 90) result = "Ninety";
-		else if (int > 90 && int < 100) result = "Ninety " + SNR_spelt_number(int%10);
+		else if (int > 90 && int < 100) result = "Ninety " + SNR_spelt_int(int%10);
 		if (sign == false) return result;
 		else return "Negative " + result;
 	}
 	else if (int < 1000) {
-		result = "" + SNR_spelt_number(int/100) + " Hundred";
-		if (int%100 != 0) result += " and " + SNR_spelt_number(int%100);
+		result = "" + SNR_spelt_int(int/100) + " Hundred";
+		if (int%100 != 0) result += " and " + SNR_spelt_int(int%100);
 		if (sign == false) return result;
 		else return "Negative " + result;
 	}
 	else if (int < 1000000) {
-		result = "" + SNR_spelt_number(int/1000) + " Thousand";
-		if (int%1000 != 0) result += ", " + SNR_spelt_number(int%1000);
+		result = "" + SNR_spelt_int(int/1000) + " Thousand";
+		if (int%1000 != 0) result += ", " + SNR_spelt_int(int%1000);
 		if (sign == false) return result;
 		else return "Negative " + result;
 	}
 	else if (int < 1000000000) {
-		result = "" + SNR_spelt_number(int/1000000) + " Million";
-		if (int%1000000 != 0) result += ", " + SNR_spelt_number(int%1000000);
+		result = "" + SNR_spelt_int(int/1000000) + " Million";
+		if (int%1000000 != 0) result += ", " + SNR_spelt_int(int%1000000);
 		if (sign == false) return result;
 		else return "Negative " + result;
 	}
 	else if (int < 1000000000000) {
-		result = "" + SNR_spelt_number(int/1000000000) + " Billion";
-		if (int%1000000000 != 0) result += ", " + SNR_spelt_number(int%1000000000);
+		result = "" + SNR_spelt_int(int/1000000000) + " Billion";
+		if (int%1000000000 != 0) result += ", " + SNR_spelt_int(int%1000000000);
 		if (sign == false) return result;
 		else return "Negative " + result;
 	}
 	else {
-		if (random > 0.5) result = "\"A Lot\"";
-		else result = "\"A Thousand\"";
+		rng = random;
+		if (rng > 0.66) result = "\"A Lot\"";
+		else if (rng < 0.33) result = "\"A Bunch\"";
+		else result = "\"Way too much\""
 		if (sign == false) return result;
 		else return "Negative " + result;
 	}
